@@ -83,7 +83,10 @@ export const hapticFeedback = {
   error: errorHaptic,
   selection: selectionHaptic,
 
-  // Action-specific haptics
+} as const;
+
+// Action-specific haptics
+export const actionHaptics = {
   taskComplete: successHaptic,
   taskCreate: lightHaptic,
   taskDelete: mediumHaptic,
@@ -93,5 +96,5 @@ export const hapticFeedback = {
   levelUp: heavyHaptic,
   badgeUnlock: successHaptic,
   swipe: lightHaptic,
-  error: errorHaptic,
+  actionError: errorHaptic,
 } as const;

@@ -90,6 +90,70 @@ export default function MoreScreen() {
           </View>
         </TouchableOpacity>
 
+        {/* AI Tools - NEW */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🤖 AI Tools</Text>
+          <View style={styles.menuGroup}>
+            <MenuItem
+              icon="🪄"
+              title="Magic Breakdown"
+              subtitle="Break tasks into tiny steps"
+              onPress={() => router.push('/tools/magic')}
+              badge="NEW"
+            />
+            <MenuItem
+              icon="🥄"
+              title="Spoon Estimator"
+              subtitle="Estimate task energy cost"
+              onPress={() => router.push('/tools/spoons')}
+            />
+            <MenuItem
+              icon="✍️"
+              title="Tone Rewriter"
+              subtitle="Transform text to any tone"
+              onPress={() => router.push('/tools/tone')}
+            />
+            <MenuItem
+              icon="📝"
+              title="Note Compiler"
+              subtitle="Combine scattered notes"
+              onPress={() => router.push('/tools/compile')}
+            />
+            <MenuItem
+              icon="🤖"
+              title="All AI Tools"
+              subtitle="View all productivity tools"
+              onPress={() => router.push('/tools')}
+            />
+          </View>
+        </View>
+
+        {/* Study Hub - NEW */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>📚 Learning</Text>
+          <View style={styles.menuGroup}>
+            <MenuItem
+              icon="🎴"
+              title="Flashcards"
+              subtitle="Study with spaced repetition"
+              onPress={() => router.push('/study')}
+              badge="NEW"
+            />
+            <MenuItem
+              icon="📋"
+              title="Quizzes"
+              subtitle="Test your knowledge"
+              onPress={() => router.push('/study')}
+            />
+            <MenuItem
+              icon="🤖"
+              title="AI Generate Cards"
+              subtitle="Create flashcards from any content"
+              onPress={() => router.push('/study/generate')}
+            />
+          </View>
+        </View>
+
         {/* Main Menu */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Features</Text>
@@ -109,9 +173,9 @@ export default function MoreScreen() {
             />
             <MenuItem
               icon="📝"
-              title="Routines"
-              subtitle="Morning, evening, and custom routines"
-              onPress={() => router.push('/routine/create')}
+              title="Daily Planning"
+              subtitle="Plan your day with 1-3-5 rule"
+              onPress={() => router.push('/planning')}
             />
             <MenuItem
               icon="😊"

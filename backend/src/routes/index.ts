@@ -1,0 +1,52 @@
+import { Router, Request, Response } from 'express';
+import tasksRouter from './tasks.js';
+import habitsRouter from './habits.js';
+import focusRouter from './focus.js';
+import aiRouter from './ai.js';
+import aiToolsRouter from './aiTools.js';
+import studyRouter from './study.js';
+import captureRouter from './capture.js';
+import analyticsRouter from './analytics.js';
+
+const router = Router();
+
+// Health check
+router.get('/health', (req: Request, res: Response) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'BrainXP API is running',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0',
+  });
+});
+
+// API version info
+router.get('/', (req: Request, res: Response) => {
+  res.json({
+    name: 'BrainXP API',
+    version: '1.0.0',
+    description: 'Backend API for BrainXP ADHD Support Application',
+    endpoints: {
+      tasks: '/api/tasks',
+      habits: '/api/habits',
+      focus: '/api/focus',
+      ai: '/api/ai',
+      aiTools: '/api/ai-tools',
+      study: '/api/study',
+      captures: '/api/captures',
+      analytics: '/api/analytics',
+    },
+  });
+});
+
+// Mount route modules
+router.use('/tasks', tasksRouter);
+router.use('/habits', habitsRouter);
+router.use('/focus', focusRouter);
+router.use('/ai', aiRouter);
+router.use('/ai-tools', aiToolsRouter);
+router.use('/study', studyRouter);
+router.use('/captures', captureRouter);
+router.use('/analytics', analyticsRouter);
+
+export default router;

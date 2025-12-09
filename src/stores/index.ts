@@ -5,4 +5,6 @@ export { useFocusStore } from './focusStore';
 export { useCaptureStore } from './captureStore';
 export { useProgressStore } from './progressStore';
 export { useSettingsStore } from './settingsStore';
+export { useTherapyStore } from './therapyStore';
+export { useStudyStore } from './studyStore';
 export type { AppSettings } from './settingsStore';

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,42 +12,99 @@ import { useHabitStore } from '../../src/stores/habitStore';
 import { useProgressStore } from '../../src/stores/progressStore';
 import { colors } from '../../src/theme/colors';
 import { getShortDayNames } from '../../src/utils/date';
+import { HabitWithLogs } from '../../src/types/habit';
+
+// Stable date values computed once per day
+const getDateInfo = () => {
+  const now = new Date();
+  return {
+    todayStr: now.toISOString().split('T')[0],
+    dayOfWeek: now.getDay(),
+  };
+};
 
 export default function HabitsScreen() {
   const router = useRouter();
 
-  const habits = useHabitStore((state) => state.getActiveHabits());
-  const todayHabits = useHabitStore((state) => state.getTodayHabits());
-  const logHabit = useHabitStore((state) => state.logHabit);
-  const calculateFlexibleStreak = useHabitStore(
-    (state) => state.calculateFlexibleStreak
-  );
+  // Use ref for stable date values that don't cause re-renders
+  const dateInfoRef = useRef(getDateInfo());
+  const { todayStr, dayOfWeek } = dateInfoRef.current;
 
-  const addXP = useProgressStore((state) => state.addXP);
+  // Select raw data from stores - use getState() for initial values to avoid subscription loops
+  const habitsData = useHabitStore((state) => state.habits);
+  const logsData = useHabitStore((state) => state.logs);
 
-  const today = new Date().toISOString().split('T')[0];
-  const dayOfWeek = new Date().getDay();
+  // Compute derived data locally with useMemo
+  const habits = useMemo(() => {
+    if (!habitsData) return [];
+    return habitsData.filter((h) => !h.archivedAt);
+  }, [habitsData]);
 
-  const handleHabitToggle = async (habitId: string) => {
-    const habit = todayHabits.find((h) => h.id === habitId);
+  const todayHabits = useMemo((): HabitWithLogs[] => {
+    if (!habitsData || !logsData) return [];
+    
+    return habitsData
+      .filter((h) => !h.archivedAt && h.daysOfWeek.includes(dayOfWeek))
+      .map((habit) => {
+        const habitLogs = logsData.filter((l) => l.habitId === habit.id);
+        const todayLog = habitLogs.find((l) => l.date === todayStr);
+        return { ...habit, logs: habitLogs, todayLog };
+      });
+  }, [habitsData, logsData, dayOfWeek, todayStr]);
+
+  // Calculate flexible streak locally - memoize per habit
+  const getFlexibleStreak = useCallback((habitId: string, windowDays = 14) => {
+    if (!logsData) return { completed: 0, total: windowDays, percentage: 0, windowDays };
+    
+    const today = new Date();
+    const windowStart = new Date(today);
+    windowStart.setDate(windowStart.getDate() - windowDays);
+
+    const completedLogs = logsData.filter((l) => {
+      if (l.habitId !== habitId) return false;
+      const logDate = new Date(l.date);
+      return logDate >= windowStart && logDate <= today && l.completed;
+    });
+
+    return {
+      completed: completedLogs.length,
+      total: windowDays,
+      percentage: Math.round((completedLogs.length / windowDays) * 100),
+      windowDays,
+    };
+  }, [logsData]);
+
+  const handleHabitToggle = useCallback(async (habitId: string) => {
+    // Get current state directly to avoid stale closure issues
+    const currentHabits = useHabitStore.getState().habits;
+    const currentLogs = useHabitStore.getState().logs;
+    
+    const habit = currentHabits.find((h) => h.id === habitId);
     if (!habit) return;
 
-    const isCompleted = habit.todayLog?.completed;
+    const todayLog = currentLogs.find((l) => l.habitId === habitId && l.date === todayStr);
+    const isCompleted = todayLog?.completed;
 
-    const result = await logHabit({
+    // Use getState() to get action without selector subscription
+    const result = await useHabitStore.getState().logHabit({
       habitId,
-      date: today,
+      date: todayStr,
       completed: !isCompleted,
     });
 
-    if (!isCompleted) {
-      await addXP(result.xpEarned, 'habit_log', 'Logged a habit', habitId);
+    if (!isCompleted && result.xpEarned > 0) {
+      // Use getState() for addXP too to avoid subscription issues
+      await useProgressStore.getState().addXP(result.xpEarned, 'habit_log', 'Logged a habit', habitId);
     }
-  };
+  }, [todayStr]);
 
-  const completedCount = todayHabits.filter((h) => h.todayLog?.completed).length;
-  const totalCount = todayHabits.length;
-  const completionPercentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+  // Memoize computed stats to prevent recalculation on each render
+  const { completedCount, totalCount, completionPercentage } = useMemo(() => {
+    const completed = todayHabits.filter((h) => h.todayLog?.completed).length;
+    const total = todayHabits.length;
+    const percentage = total > 0 ? (completed / total) * 100 : 0;
+    return { completedCount: completed, totalCount: total, completionPercentage: percentage };
+  }, [todayHabits]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -113,7 +170,7 @@ export default function HabitsScreen() {
           ) : (
             <View style={styles.habitsList}>
               {todayHabits.map((habit) => {
-                const flexStreak = calculateFlexibleStreak(habit.id);
+                const flexStreak = getFlexibleStreak(habit.id);
                 return (
                   <TouchableOpacity
                     key={habit.id}

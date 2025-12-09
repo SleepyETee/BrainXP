@@ -20,7 +20,7 @@ export default function RootLayout() {
   useEffect(() => {
     // Initialize progress tracking on app start
     initializeProgress();
-  }, []);
+  }, [initializeProgress]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -42,6 +42,7 @@ export default function RootLayout() {
               animation: 'slide_from_bottom',
             }}
           />
+          <Stack.Screen name="task/[id]" />
           <Stack.Screen
             name="focus/setup"
             options={{
@@ -50,6 +51,7 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen name="focus/active" />
+          <Stack.Screen name="focus/complete" />
           <Stack.Screen
             name="inbox"
             options={{
@@ -57,6 +59,40 @@ export default function RootLayout() {
               animation: 'slide_from_bottom',
             }}
           />
+          <Stack.Screen
+            name="habit/create"
+            options={{
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+            }}
+          />
+          <Stack.Screen name="habit/[id]" />
+          <Stack.Screen
+            name="wellness/mood"
+            options={{
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+            }}
+          />
+          <Stack.Screen
+            name="wellness/breathing"
+            options={{
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+            }}
+          />
+          <Stack.Screen name="analytics" />
+          <Stack.Screen
+            name="planning"
+            options={{
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+            }}
+          />
+          <Stack.Screen name="therapy" />
+          <Stack.Screen name="tools" />
+          <Stack.Screen name="study" />
+          <Stack.Screen name="settings" />
         </Stack>
       </QueryClientProvider>
     </GestureHandlerRootView>

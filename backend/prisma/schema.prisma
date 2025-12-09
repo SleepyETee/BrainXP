@@ -38,6 +38,27 @@ model User {
   progress          UserProgress?
   badges            UserBadge[]
   xpEvents          XPEvent[]
+  
+  // Non-drug treatment relations
+  cbtInterventions       CBTIntervention[]
+  thoughtLogs            ThoughtLog[]
+  cognitiveProfile       CognitiveProfile?
+  focusSessionPlans      FocusSessionPlan[]
+  cognitiveTraining      CognitiveTrainingSession[]
+  mindfulnessSessions    MindfulnessSession[]
+  educationProgress      EducationProgress?
+  triggeredEducation     TriggeredEducation[]
+  tdcsSessions           TDCSSession[]
+  
+  // Learning & Study relations
+  studySets              StudySet[]
+  quizzes                Quiz[]
+  notes                  Note[]
+  noteFolders            NoteFolder[]
+  documents              Document[]
+  dailyLists             DailyList[]
+  things                 Thing[]
+  aiToolUsage            AIToolUsage[]
 
   @@map("users")
 }
@@ -367,4 +388,620 @@ model XPEvent {
   @@index([userId])
   @@index([timestamp])
   @@map("xp_events")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NON-DRUG ADHD TREATMENT MODELS
+// CBT, Cognitive Remediation, Mindfulness, Psychoeducation, tDCS Tracking
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────────────────────
+// A. CBT (Cognitive Behavioral Therapy)
+// ─────────────────────────────────────────────────────────────────────────────────
+
+model CBTIntervention {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId          String
+  
+  triggeredAt     DateTime  @default(now())
+  triggerType     String    // user_flagged, overdue_nudge, pattern_detected
+  
+  negativeThoughts Json     // Array of { id, text, presetKey }
+  balancedThoughts Json     // Array of { id, text }
+  twoMinuteAction String?
+  
+  outcome         String?   // completed_action, broke_down_task, lowered_bar, dropped_task, skipped
+  outcomeNotes    String?
+  
+  completedAt     DateTime?
+  
+  @@index([userId])
+  @@index([taskId])
+  @@map("cbt_interventions")
+}
+
+model ThoughtLog {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId           String?
+  
+  patternTags      String[] // perfectionism, fear_of_criticism, boredom, etc.
+  situation        String
+  automaticThought String
+  emotion          String
+  emotionIntensity Int      // 1-10
+  
+  balancedThought  String?
+  outcomeEmotion   String?
+  outcomeIntensity Int?
+  
+  createdAt        DateTime @default(now())
+  
+  @@index([userId])
+  @@index([patternTags])
+  @@map("thought_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────
+// B. Cognitive Remediation
+// ─────────────────────────────────────────────────────────────────────────────────
+
+model CognitiveProfile {
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  workingMemoryCapacity Int      @default(3) // Recommended steps 2-5
+  lastAssessed          DateTime @default(now())
+  assessmentHistory     Json?    // Array of { date, stepsAttempted, stepsRemembered, successRate }
+  
+  @@map("cognitive_profiles")
+}
+
+model FocusSessionPlan {
+  id                   String    @id @default(uuid())
+  userId               String
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId            String
+  
+  steps                Json      // Array of { id, text, completed, forgotten }
+  maxStepsRecommended  Int
+  stepsRemembered      Int       @default(0)
+  stepsForgotten       Int       @default(0)
+  
+  createdAt            DateTime  @default(now())
+  completedAt          DateTime?
+  
+  @@index([userId])
+  @@index([sessionId])
+  @@map("focus_session_plans")
+}
+
+model CognitiveTrainingSession {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  skill        String   // working_memory, attention_switching, planning, etc.
+  exerciseType String
+  difficulty   Int      // 1-5
+  duration     Int      // in seconds
+  score        Int
+  accuracy     Float
+  
+  startedAt    DateTime @default(now())
+  completedAt  DateTime
+  
+  @@index([userId])
+  @@index([skill])
+  @@map("cognitive_training_sessions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────
+// C. Mindfulness
+// ─────────────────────────────────────────────────────────────────────────────────
+
+model MindfulnessSession {
+  id                   String    @id @default(uuid())
+  userId               String
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type                 String    // grounding_5_4_3_2_1, mindful_breathing, body_scan, etc.
+  trigger              String    // focus_session_start, overwhelm_button, manual, etc.
+  contextTaskId        String?
+  contextFocusSessionId String?
+  
+  duration             Int       // in seconds
+  completed            Boolean   @default(false)
+  
+  moodBefore           Int?      // 1-5
+  moodAfter            Int?
+  
+  startedAt            DateTime  @default(now())
+  completedAt          DateTime?
+  
+  @@index([userId])
+  @@index([type])
+  @@map("mindfulness_sessions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────
+// D. Psychoeducation
+// ─────────────────────────────────────────────────────────────────────────────────
+
+model EducationProgress {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  cardsViewed         String[]
+  cardsBookmarked     String[]
+  categoriesExplored  String[]
+  lastCardAt          DateTime?
+  streakDays          Int      @default(0)
+  
+  @@map("education_progress")
+}
+
+model TriggeredEducation {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  cardId         String
+  trigger        String    // reminder_fatigue, repeated_snoozing, task_abandonment, etc.
+  triggerContext Json?     // { taskId, snoozeCount, interruptionCount, pattern }
+  
+  viewed         Boolean   @default(false)
+  dismissed      Boolean   @default(false)
+  helpfulRating  Int?      // 1-5
+  
+  shownAt        DateTime  @default(now())
+  viewedAt       DateTime?
+  
+  @@index([userId])
+  @@index([cardId])
+  @@map("triggered_education")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────
+// E. tDCS Tracking (for supervised studies only)
+// ─────────────────────────────────────────────────────────────────────────────────
+
+model TDCSSession {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  sessionDate    DateTime @db.Date
+  sessionTime    String
+  duration       Int      // in minutes
+  intensity      Float?   // in mA
+  montage        String?  // electrode placement
+  studyProtocol  String?
+  
+  // Pre-session ratings (1-5)
+  preFocusRating  Int
+  preMoodRating   Int
+  preEnergyRating Int
+  
+  // Post-session ratings (1-5)
+  postFocusRating  Int?
+  postMoodRating   Int?
+  postEnergyRating Int?
+  
+  sideEffects    Json?    // Array of { type, severity, duration, notes }
+  notes          String?
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([sessionDate])
+  @@map("tdcs_sessions")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LEARNING & FLASHCARDS (Quizlet/NotebookLM-inspired)
+// Spaced Repetition, Study Sets, Quizzes, AI-Generated Content
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model StudySet {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title       String
+  description String?
+  icon        String?
+  color       String?
+  
+  isPublic    Boolean  @default(false)
+  isFavorite  Boolean  @default(false)
+  
+  // AI-generated metadata
+  aiGenerated   Boolean  @default(false)
+  sourceDocId   String?  // Reference to source document if AI-generated
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  archivedAt  DateTime?
+  
+  cards         Flashcard[]
+  quizzes       Quiz[]
+  studySessions StudySession[]
+  
+  @@index([userId])
+  @@map("study_sets")
+}
+
+model Flashcard {
+  id          String    @id @default(uuid())
+  studySetId  String
+  studySet    StudySet  @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+  
+  front       String    // Question/term (supports markdown)
+  back        String    // Answer/definition (supports markdown)
+  hint        String?
+  explanation String?   // Detailed explanation for learning
+  
+  imageUrlFront String?
+  imageUrlBack  String?
+  audioUrl      String?
+  
+  // Spaced Repetition (SM-2 Algorithm)
+  easeFactor    Float     @default(2.5)  // E-Factor (1.3 - 2.5+)
+  interval      Int       @default(0)    // Days until next review
+  repetitions   Int       @default(0)    // Successful reviews in a row
+  nextReview    DateTime?
+  lastReview    DateTime?
+  
+  // Learning state
+  learningState String    @default("new") // new, learning, review, relearning
+  lapses        Int       @default(0)     // Times forgotten after learning
+  
+  tags          String[]
+  order         Int       @default(0)
+  
+  // AI metadata
+  aiGenerated   Boolean   @default(false)
+  confidence    Float?    // AI confidence in the card quality
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  reviews       FlashcardReview[]
+  
+  @@index([studySetId])
+  @@index([nextReview])
+  @@index([learningState])
+  @@map("flashcards")
+}
+
+model FlashcardReview {
+  id          String    @id @default(uuid())
+  flashcardId String
+  flashcard   Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  userId      String
+  
+  quality     Int       // 0-5 rating (SM-2: 0=complete blackout, 5=perfect)
+  responseTime Int?     // milliseconds to answer
+  
+  // State before review
+  prevEaseFactor Float
+  prevInterval   Int
+  
+  // State after review
+  newEaseFactor  Float
+  newInterval    Int
+  
+  reviewedAt  DateTime  @default(now())
+  
+  @@index([flashcardId])
+  @@index([userId])
+  @@map("flashcard_reviews")
+}
+
+model StudySession {
+  id          String    @id @default(uuid())
+  studySetId  String
+  studySet    StudySet  @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+  userId      String
+  
+  mode        String    @default("review") // review, learn, cram, test
+  
+  cardsTotal      Int   @default(0)
+  cardsReviewed   Int   @default(0)
+  cardsCorrect    Int   @default(0)
+  cardsIncorrect  Int   @default(0)
+  cardsSkipped    Int   @default(0)
+  
+  // Detailed results
+  cardResults     Json?  // Array of { cardId, quality, responseTime }
+  
+  duration        Int?   // seconds
+  xpEarned        Int    @default(0)
+  
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  
+  @@index([studySetId])
+  @@index([userId])
+  @@map("study_sessions")
+}
+
+model Quiz {
+  id          String    @id @default(uuid())
+  studySetId  String?
+  studySet    StudySet? @relation(fields: [studySetId], references: [id], onDelete: SetNull)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title       String
+  description String?
+  
+  type        String    @default("mixed") // multiple_choice, true_false, written, matching, mixed
+  
+  // Questions stored as JSON for flexibility
+  // [{ id, type, question, options?, correctAnswer, explanation?, points }]
+  questions   Json
+  
+  totalPoints Int       @default(0)
+  timeLimit   Int?      // seconds (null = no limit)
+  
+  // AI generation metadata
+  aiGenerated   Boolean  @default(false)
+  sourceContent String?  // Original text used to generate quiz
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  attempts    QuizAttempt[]
+  
+  @@index([userId])
+  @@index([studySetId])
+  @@map("quizzes")
+}
+
+model QuizAttempt {
+  id          String    @id @default(uuid())
+  quizId      String
+  quiz        Quiz      @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  userId      String
+  
+  // Results
+  score       Float     // Percentage (0-100)
+  pointsEarned Int      @default(0)
+  pointsTotal  Int      @default(0)
+  
+  // Detailed answers: [{ questionId, answer, correct, timeSpent }]
+  answers     Json
+  
+  timeSpent   Int?      // seconds
+  xpEarned    Int       @default(0)
+  
+  completedAt DateTime  @default(now())
+  
+  @@index([quizId])
+  @@index([userId])
+  @@map("quiz_attempts")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NOTES & DOCUMENTS (NotebookLM-inspired)
+// Smart Notes, Document Processing, AI Chat
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model Note {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title       String
+  content     String    // Markdown content
+  
+  folderId    String?
+  folder      NoteFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  
+  tags        String[]
+  isPinned    Boolean   @default(false)
+  isFavorite  Boolean   @default(false)
+  
+  // AI-generated insights
+  aiSummary     String?
+  aiKeyPoints   String[]  // Extracted key points
+  aiTags        String[]  // Auto-suggested tags
+  
+  // For semantic search (store embeddings separately or use pgvector)
+  embeddingId   String?
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  archivedAt  DateTime?
+  
+  @@index([userId])
+  @@index([folderId])
+  @@map("notes")
+}
+
+model NoteFolder {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name        String
+  icon        String?
+  color       String?
+  parentId    String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  notes       Note[]
+  
+  @@index([userId])
+  @@map("note_folders")
+}
+
+model Document {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name          String
+  originalName  String
+  mimeType      String
+  fileUrl       String
+  fileSize      Int       // bytes
+  
+  // Processing status
+  status        String    @default("pending") // pending, processing, completed, failed
+  processedAt   DateTime?
+  
+  // Extracted content
+  extractedText String?
+  pageCount     Int?
+  
+  // AI-generated content
+  aiSummary     String?
+  aiKeyPoints   String[]
+  aiOutline     Json?     // Structured outline
+  
+  // For semantic search
+  embeddingId   String?
+  
+  // Generated study materials
+  generatedFlashcards String?  // StudySet ID
+  generatedQuiz       String?  // Quiz ID
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  chatMessages  DocumentChat[]
+  
+  @@index([userId])
+  @@index([status])
+  @@map("documents")
+}
+
+model DocumentChat {
+  id          String   @id @default(uuid())
+  documentId  String
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId      String
+  
+  role        String   // user, assistant
+  content     String
+  
+  // For citations
+  citations   Json?    // [{ pageNumber, excerpt, relevance }]
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([documentId])
+  @@map("document_chats")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DAILY LISTS (Twos-inspired)
+// Quick daily note-taking organized by date
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model DailyList {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  date        DateTime @db.Date
+  
+  items       DailyListItem[]
+  
+  @@unique([userId, date])
+  @@index([userId])
+  @@map("daily_lists")
+}
+
+model DailyListItem {
+  id          String    @id @default(uuid())
+  dailyListId String
+  dailyList   DailyList @relation(fields: [dailyListId], references: [id], onDelete: Cascade)
+  
+  content     String
+  type        String    @default("note") // note, task, idea, reminder
+  isCompleted Boolean   @default(false)
+  order       Int       @default(0)
+  
+  // Optional task conversion
+  convertedToTaskId String?
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([dailyListId])
+  @@map("daily_list_items")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// THINGS DATABASE (Twos-inspired)
+// Personal database for tracking anything
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model Thing {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  category    String   // movies, books, restaurants, recipes, ideas, places, people, etc.
+  title       String
+  subtitle    String?
+  description String?
+  imageUrl    String?
+  
+  rating      Int?     // 1-5
+  status      String?  // want_to, in_progress, completed, etc.
+  
+  // Flexible metadata as JSON
+  metadata    Json?    // { author, year, location, url, etc. }
+  
+  tags        String[]
+  isFavorite  Boolean  @default(false)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([category])
+  @@map("things")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AI TOOLS HISTORY
+// Track usage of AI tools for analytics and improvement
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model AIToolUsage {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  tool        String   // spoon_estimator, tone_rewriter, note_compiler, quiz_generator, etc.
+  input       Json     // Tool-specific input
+  output      Json     // Tool-specific output
+  
+  // User feedback
+  wasHelpful  Boolean?
+  feedback    String?
+  
+  // Performance
+  processingTime Int?  // milliseconds
+  tokensUsed     Int?
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([userId])
+  @@index([tool])
+  @@map("ai_tool_usage")
 }

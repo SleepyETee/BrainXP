@@ -1,7 +1,10 @@
-export { Button, default as ButtonDefault } from './Button';
-export { Card, CardHeader, CardContent, CardFooter, default as CardDefault } from './Card';
-export { Input, TextArea, default as InputDefault } from './Input';
-export { Modal, ConfirmModal, default as ModalDefault } from './Modal';
-export { Badge, StatusBadge, PriorityBadge, default as BadgeDefault } from './Badge';
-export { ProgressBar, CircularProgress, default as ProgressBarDefault } from './ProgressBar';
-export { Avatar, AvatarGroup, default as AvatarDefault } from './Avatar';
+export { Avatar } from './Avatar';
+export { Badge } from './Badge';
+export { Button } from './Button';
+export { Card } from './Card';
+export { Input } from './Input';
+export { Modal } from './Modal';
+export { ProgressBar } from './ProgressBar';
+export { AnimatedButton } from './AnimatedButton';
+export { GradientCard } from './GradientCard';
+export { GlassCard } from './GlassCard';

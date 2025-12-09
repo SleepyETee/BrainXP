@@ -1,0 +1,16 @@
+import { Stack } from 'expo-router';
+import { colors } from '../../src/theme/colors';
+
+export default function SettingsLayout() {
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.gray[50] },
+      }}
+    >
+      <Stack.Screen name="index" />
+      <Stack.Screen name="accessibility" />
+    </Stack>
+  );
+}

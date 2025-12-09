@@ -92,7 +92,13 @@ export const useHabitStore = create<HabitState>()(
         try {
           set((state) => ({
             habits: state.habits.map((h) =>
-              h.id === id ? { ...h, ...updates } : h
+              h.id === id 
+                ? { 
+                    ...h, 
+                    ...updates,
+                    archivedAt: updates.archivedAt === null ? undefined : updates.archivedAt ?? h.archivedAt,
+                  } 
+                : h
             ),
           }));
         } catch (error) {

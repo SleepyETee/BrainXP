@@ -105,7 +105,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
       multiline
       numberOfLines={rows}
       textAlignVertical="top"
-      inputStyle={[{ minHeight: rows * 24 }, props.inputStyle]}
+      inputStyle={{ minHeight: rows * 24, ...props.inputStyle }}
     />
   );
 };

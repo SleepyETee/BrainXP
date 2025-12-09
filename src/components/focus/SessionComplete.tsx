@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Button } from '../ui/Button';
@@ -23,7 +23,7 @@ export const SessionComplete: React.FC<SessionCompleteProps> = ({
   showTaskComplete = true,
 }) => {
   const scaleAnim = useRef(new Animated.Value(0)).current;
-  const xpAnim = useRef(new Animated.Value(0)).current;
+  const [displayXP, setDisplayXP] = useState(0);
 
   useEffect(() => {
     // Trigger success haptic
@@ -38,12 +38,24 @@ export const SessionComplete: React.FC<SessionCompleteProps> = ({
     }).start();
 
     // Animate XP counter
-    Animated.timing(xpAnim, {
-      toValue: xpEarned,
-      duration: 1500,
-      useNativeDriver: false,
-    }).start();
-  }, []);
+    const duration = 1500;
+    const steps = 30;
+    const stepDuration = duration / steps;
+    let currentStep = 0;
+
+    const interval = setInterval(() => {
+      currentStep++;
+      const progress = currentStep / steps;
+      setDisplayXP(Math.round(xpEarned * progress));
+      
+      if (currentStep >= steps) {
+        clearInterval(interval);
+        setDisplayXP(xpEarned);
+      }
+    }, stepDuration);
+
+    return () => clearInterval(interval);
+  }, [xpEarned]);
 
   return (
     <View style={styles.container}>
@@ -71,12 +83,9 @@ export const SessionComplete: React.FC<SessionCompleteProps> = ({
           <View style={styles.statDivider} />
 
           <View style={styles.statItem}>
-            <Animated.Text style={styles.statValueXP}>
-              +{xpAnim.interpolate({
-                inputRange: [0, xpEarned],
-                outputRange: ['0', xpEarned.toString()],
-              })}
-            </Animated.Text>
+            <Text style={styles.statValueXP}>
+              +{displayXP}
+            </Text>
             <Text style={styles.statLabel}>XP Earned</Text>
           </View>
         </View>

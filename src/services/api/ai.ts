@@ -6,15 +6,16 @@ import { ApiResponse } from '../../types';
 export interface AIInsight {
   id: string;
   type: 'productivity' | 'pattern' | 'suggestion' | 'encouragement';
+  icon: string;
   title: string;
   message: string;
   actionLabel?: string;
-  actionType?: string;
+  actionType?: 'navigate' | 'start_focus' | 'view_tasks';
   actionData?: Record<string, unknown>;
-  priority: number;
-  createdAt: string;
+  priority?: number;
+  createdAt?: string;
   expiresAt?: string;
-  dismissed: boolean;
+  dismissed?: boolean;
 }
 
 export interface SmartScheduleSuggestion {
@@ -33,14 +34,64 @@ export interface TaskEstimateAdjustment {
   reasoning: string;
 }
 
-// Task decomposition
+export interface DecomposeTaskRequest {
+  title: string;
+  description?: string;
+  dueDate?: string;
+  userContext?: {
+    averageTimeRatio?: number;
+    preferredTaskDuration?: number;
+    energyLevel?: 'low' | 'medium' | 'high';
+    currentMood?: number;
+  };
+}
+
+export interface DecomposeTaskResponse {
+  suggestedSteps: {
+    title: string;
+    estimatedMinutes: number;
+    order: number;
+    energyRequired?: 'low' | 'medium' | 'high';
+    tip?: string;
+  }[];
+  smallestFirstStep: string;
+  totalEstimatedMinutes: number;
+  adjustedEstimate: number;
+  userTimeRatio: number;
+  motivationalNote?: string;
+}
+
+export interface FirstStepSuggestion {
+  suggestion: string;
+  alternatives: string[];
+  encouragement: string;
+}
+
+export interface DailySummaryResponse {
+  headline: string;
+  highlights: string[];
+  insights: string;
+  suggestion: string;
+  closingMessage: string;
+}
+
+export interface EncouragementResponse {
+  message: string;
+  bonusTip?: string;
+}
+
+export interface AICoachMessage {
+  response: string;
+  suggestions: string[];
+}
+
+// Task decomposition with Claude AI
 export const decomposeTask = async (
-  taskId: string,
-  context?: string
-): Promise<AIDecompositionResult> => {
-  const response = await apiClient.post<ApiResponse<AIDecompositionResult>>(
-    '/ai/decompose-task',
-    { taskId, context }
+  request: DecomposeTaskRequest
+): Promise<DecomposeTaskResponse> => {
+  const response = await apiClient.post<ApiResponse<DecomposeTaskResponse>>(
+    '/ai/decompose',
+    request
   );
   return response.data.data;
 };
@@ -67,65 +118,109 @@ export const adjustTimeEstimate = async (
   return response.data.data;
 };
 
-// Capture processing
+// Capture processing with AI categorization
 export const processCaptureWithAI = async (
-  captureId: string
+  captureData: {
+    contentType: 'text' | 'voice' | 'photo' | 'link';
+    textContent?: string;
+    voiceTranscript?: string;
+    linkUrl?: string;
+  }
 ): Promise<AISuggestion> => {
-  const response = await apiClient.post<ApiResponse<AISuggestion>>(
+  const response = await apiClient.post<ApiResponse<{ suggestion: AISuggestion }>>(
     '/ai/process-capture',
-    { captureId }
+    captureData
   );
-  return response.data.data;
+  return response.data.data.suggestion;
 };
 
-// Insights
-export const getInsights = async (): Promise<AIInsight[]> => {
-  const response = await apiClient.get<ApiResponse<AIInsight[]>>('/ai/insights');
-  return response.data.data;
+// Get personalized AI insights based on user data
+export const getInsights = async (userData: {
+  tasksCompleted?: number;
+  focusMinutes?: number;
+  habitsCompleted?: number;
+  currentStreak?: number;
+  averageFocusSession?: number;
+  overdueTaskCount?: number;
+  mood?: number;
+  timeOfDay?: 'morning' | 'afternoon' | 'evening' | 'night';
+}): Promise<AIInsight[]> => {
+  const response = await apiClient.post<ApiResponse<{ insights: AIInsight[] }>>(
+    '/ai/insights',
+    userData
+  );
+  return response.data.data.insights;
 };
 
 export const dismissInsight = async (id: string): Promise<void> => {
   await apiClient.post(`/ai/insights/${id}/dismiss`);
 };
 
-// Daily summary
-export const getDailySummary = async (date?: string): Promise<{
+// Get AI-generated daily summary
+export const getDailySummary = async (summaryData: {
   tasksCompleted: number;
+  totalTasks: number;
   focusMinutes: number;
   habitsCompleted: number;
+  totalHabits: number;
   xpEarned: number;
-  highlights: string[];
-  suggestions: string[];
-}> => {
-  const response = await apiClient.get<ApiResponse<{
-    tasksCompleted: number;
-    focusMinutes: number;
-    habitsCompleted: number;
-    xpEarned: number;
-    highlights: string[];
-    suggestions: string[];
-  }>>('/ai/daily-summary', { params: { date } });
+  streak: number;
+  mood?: number;
+}): Promise<DailySummaryResponse> => {
+  const response = await apiClient.post<ApiResponse<DailySummaryResponse>>(
+    '/ai/daily-summary',
+    summaryData
+  );
   return response.data.data;
 };
 
-// Encouragement messages
+// Get contextual encouragement messages
 export const getEncouragement = async (context?: {
   tasksCompleted?: number;
   streak?: number;
   mood?: number;
-}): Promise<string> => {
-  const response = await apiClient.post<ApiResponse<{ message: string }>>(
+  justCompletedTask?: boolean;
+  justCompletedHabit?: boolean;
+  focusSessionCompleted?: boolean;
+  focusDuration?: number;
+}): Promise<EncouragementResponse> => {
+  const response = await apiClient.post<ApiResponse<EncouragementResponse>>(
     '/ai/encouragement',
-    context
+    { context }
   );
-  return response.data.data.message;
+  return response.data.data;
 };
 
-// First step suggestion
-export const suggestFirstStep = async (taskTitle: string): Promise<string> => {
-  const response = await apiClient.post<ApiResponse<{ firstStep: string }>>(
+// First step suggestion for overcoming task paralysis
+export const suggestFirstStep = async (
+  taskTitle: string,
+  taskDescription?: string,
+  energyLevel?: 'low' | 'medium' | 'high'
+): Promise<FirstStepSuggestion> => {
+  const response = await apiClient.post<ApiResponse<FirstStepSuggestion>>(
     '/ai/suggest-first-step',
-    { taskTitle }
+    { taskTitle, taskDescription, energyLevel }
   );
-  return response.data.data.firstStep;
+  return response.data.data;
+};
+
+// Chat with AI coach
+export const chatWithCoach = async (
+  message: string,
+  conversationHistory?: { role: 'user' | 'assistant'; content: string }[]
+): Promise<AICoachMessage> => {
+  const response = await apiClient.post<ApiResponse<AICoachMessage>>(
+    '/ai/chat',
+    { message, conversationHistory }
+  );
+  return response.data.data;
+};
+
+// Utility function to get time of day
+export const getTimeOfDay = (): 'morning' | 'afternoon' | 'evening' | 'night' => {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 17) return 'afternoon';
+  if (hour >= 17 && hour < 21) return 'evening';
+  return 'night';
 };

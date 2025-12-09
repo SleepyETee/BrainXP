@@ -6,3 +6,5 @@ export * as focusApi from './focus';
 export * as captureApi from './capture';
 export * as aiApi from './ai';
 export * as analyticsApi from './analytics';
+export * as aiToolsApi from './aiTools';
+export * as studyApi from './study';

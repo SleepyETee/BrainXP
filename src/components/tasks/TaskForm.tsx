@@ -11,7 +11,7 @@ import {
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Input, TextArea } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { colors } from '../../theme/colors';
@@ -193,7 +193,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
           <DateTimePicker
             value={watchedDueDate ? new Date(watchedDueDate) : new Date()}
             mode="date"
-            onChange={(event, date) => {
+            onChange={(event: DateTimePickerEvent, date?: Date) => {
               setShowDatePicker(false);
               if (date) {
                 setValue('dueDate', date.toISOString().split('T')[0]);

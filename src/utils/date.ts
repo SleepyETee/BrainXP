@@ -164,6 +164,13 @@ export function getShortDayNames(): string[] {
 }
 
 /**
+ * Format relative time (e.g., "5 minutes ago")
+ */
+export function formatRelativeTime(date: Date): string {
+  return formatDistanceToNow(date, { addSuffix: true });
+}
+
+/**
  * Calculate streak from an array of date strings
  */
 export function calculateStreak(dates: string[]): number {

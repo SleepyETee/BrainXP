@@ -45,7 +45,7 @@ export const SoundPicker: React.FC<SoundPickerProps> = ({
                 selectedSound === sound.id && styles.compactLabelSelected,
               ]}
             >
-              {sound.label}
+              {sound.name}
             </Text>
           </TouchableOpacity>
         ))}
@@ -74,7 +74,7 @@ export const SoundPicker: React.FC<SoundPickerProps> = ({
                 selectedSound === sound.id && styles.soundLabelSelected,
               ]}
             >
-              {sound.label}
+              {sound.name}
             </Text>
           </TouchableOpacity>
         ))}

@@ -4,11 +4,14 @@ export interface Habit {
   id: string;
   userId: string;
   name: string;
+  description?: string;
   icon?: string;
   color?: string;
   frequencyType: FrequencyType;
+  frequency?: 'daily' | 'weekly' | 'custom'; // Alternative frequency field
   daysOfWeek: number[]; // 0 = Sunday, 6 = Saturday
   targetCount: number;
+  targetDaysPerWeek?: number;
   anchorHabitId?: string;
   anchorDescription?: string;
   preferredTime?: string;
@@ -20,6 +23,7 @@ export interface Habit {
   // Computed fields
   currentStreak?: number;
   longestStreak?: number;
+  bestStreak?: number;
   completionRate?: number;
 }
 

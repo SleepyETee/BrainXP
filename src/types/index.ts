@@ -19,6 +19,18 @@ export * from './user';
 // Progress types
 export * from './progress';
 
+// Therapy types (CBT, Mindfulness, Psychoeducation, etc.)
+export * from './therapy';
+
+// Study & Flashcard types (Quizlet-inspired)
+export * from './study';
+
+// Notes & Documents types (NotebookLM-inspired)
+export * from './notes';
+
+// AI Tools types (Goblin.tools-inspired)
+export * from './aiTools';
+
 // Common types
 export interface ApiResponse<T> {
   data: T;

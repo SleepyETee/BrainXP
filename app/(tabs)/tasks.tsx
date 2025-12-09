@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -27,15 +27,56 @@ export default function TasksScreen() {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<FilterTab>('today');
 
+  // Only select raw data to avoid selector issues
   const tasks = useTaskStore((state) => state.tasks);
-  const todayTasks = useTaskStore((state) => state.getTodayTasks());
-  const inboxTasks = useTaskStore((state) => state.getInboxTasks());
-  const upcomingTasks = useTaskStore((state) => state.getUpcomingTasks(7));
-  const overdueTasks = useTaskStore((state) => state.getOverdueTasks());
   const completeTask = useTaskStore((state) => state.completeTask);
   const deleteTask = useTaskStore((state) => state.deleteTask);
   const fetchTasks = useTaskStore((state) => state.fetchTasks);
   const isLoading = useTaskStore((state) => state.isLoading);
+
+  // Compute derived task lists locally to prevent infinite re-renders
+  const todayTasks = useMemo(() => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    return tasks.filter((t) => {
+      if (t.status === 'done' || t.status === 'abandoned') return false;
+      if (!t.dueDate) return false;
+      const dueDate = t.dueDate.split('T')[0];
+      return dueDate === todayStr;
+    });
+  }, [tasks]);
+
+  const inboxTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      return !t.dueDate && t.status !== 'done' && t.status !== 'abandoned';
+    });
+  }, [tasks]);
+
+  const upcomingTasks = useMemo(() => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const futureDate = new Date(today);
+    futureDate.setDate(futureDate.getDate() + 7);
+    const futureStr = futureDate.toISOString().split('T')[0];
+
+    return tasks.filter((t) => {
+      if (t.status === 'done' || t.status === 'abandoned') return false;
+      if (!t.dueDate) return false;
+      const dueDate = t.dueDate.split('T')[0];
+      return dueDate > todayStr && dueDate <= futureStr;
+    });
+  }, [tasks]);
+
+  const overdueTasks = useMemo(() => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    return tasks.filter((t) => {
+      if (t.status === 'done' || t.status === 'abandoned') return false;
+      if (!t.dueDate) return false;
+      const dueDate = t.dueDate.split('T')[0];
+      return dueDate < todayStr;
+    });
+  }, [tasks]);
 
   const addXP = useProgressStore((state) => state.addXP);
 
