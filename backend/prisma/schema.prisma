@@ -1,0 +1,370 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String    @id @default(uuid())
+  firebaseUid       String    @unique
+  email             String    @unique
+  name              String
+  avatarUrl         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Onboarding
+  adhdExperience    String?
+  primaryGoals      String[]
+  biggestChallenge  String?
+  onboardingComplete Boolean  @default(false)
+
+  // Settings
+  theme             String    @default("auto")
+  notificationsEnabled Boolean @default(true)
+  hapticFeedback    Boolean   @default(true)
+  soundEffects      Boolean   @default(true)
+
+  // Relations
+  tasks             Task[]
+  habits            Habit[]
+  routines          Routine[]
+  focusSessions     FocusSession[]
+  moodEntries       MoodEntry[]
+  captureItems      CaptureItem[]
+  progress          UserProgress?
+  badges            UserBadge[]
+  xpEvents          XPEvent[]
+
+  @@map("users")
+}
+
+model Task {
+  id                String      @id @default(uuid())
+  userId            String
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title             String
+  description       String?
+  notes             String?
+
+  parentTaskId      String?
+  parentTask        Task?       @relation("Subtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks          Task[]      @relation("Subtasks")
+
+  order             Int         @default(0)
+  status            String      @default("inbox") // inbox, todo, in_progress, waiting, done, abandoned
+
+  dueDate           DateTime?
+  dueTime           String?
+  scheduledDate     DateTime?
+  scheduledTime     String?
+
+  estimatedMinutes  Int?
+  actualMinutes     Int?
+
+  priority          String      @default("none") // urgent_important, important, urgent, low, none
+  energyRequired    String      @default("medium") // low, medium, high
+
+  tags              String[]
+  projectId         String?
+  context           String?
+
+  recurrence        Json?
+  smallestFirstStep String?
+
+  aiDecompositionUsed Boolean   @default(false)
+  source            String      @default("manual") // manual, voice, ai, share
+
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  completedAt       DateTime?
+
+  reminders         Reminder[]
+  focusSessions     FocusSession[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("tasks")
+}
+
+model Reminder {
+  id        String   @id @default(uuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  time      DateTime
+  type      String   @default("notification") // notification, alarm
+  sent      Boolean  @default(false)
+
+  @@index([taskId])
+  @@map("reminders")
+}
+
+model Habit {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name            String
+  icon            String?
+  color           String?
+
+  frequencyType   String   @default("daily") // daily, weekly, specific_days
+  daysOfWeek      Int[]    // 0 = Sunday, 6 = Saturday
+  targetCount     Int      @default(1)
+
+  anchorHabitId   String?
+  anchorDescription String?
+
+  preferredTime   String?
+  reminderEnabled Boolean  @default(false)
+  reminderTime    String?
+
+  allowPartialCredit Boolean @default(true)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  archivedAt      DateTime?
+
+  logs            HabitLog[]
+
+  @@index([userId])
+  @@map("habits")
+}
+
+model HabitLog {
+  id          String   @id @default(uuid())
+  habitId     String
+  habit       Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  date        DateTime @db.Date
+  completed   Boolean  @default(false)
+  partialCredit Float?
+  note        String?
+
+  createdAt   DateTime @default(now())
+
+  @@unique([habitId, date])
+  @@index([habitId])
+  @@index([date])
+  @@map("habit_logs")
+}
+
+model Routine {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String
+  icon        String?
+  type        String   @default("custom") // morning, evening, work, custom
+
+  daysActive  Int[]    // 0 = Sunday, 6 = Saturday
+  triggerTime String?
+
+  strictOrder Boolean  @default(true)
+  allowSkips  Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  archivedAt  DateTime?
+
+  steps       RoutineStep[]
+  executions  RoutineExecution[]
+
+  @@index([userId])
+  @@map("routines")
+}
+
+model RoutineStep {
+  id              String  @id @default(uuid())
+  routineId       String
+  routine         Routine @relation(fields: [routineId], references: [id], onDelete: Cascade)
+
+  name            String
+  icon            String?
+  estimatedMinutes Int    @default(5)
+  order           Int
+
+  isSkippable     Boolean @default(true)
+  linkedHabitId   String?
+
+  @@index([routineId])
+  @@map("routine_steps")
+}
+
+model RoutineExecution {
+  id          String    @id @default(uuid())
+  routineId   String
+  routine     Routine   @relation(fields: [routineId], references: [id], onDelete: Cascade)
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  stepsCompleted Int     @default(0)
+  stepsSkipped   Int     @default(0)
+  totalDuration  Int?    // in minutes
+
+  stepResults   Json?    // Array of step results
+
+  @@index([routineId])
+  @@map("routine_executions")
+}
+
+model FocusSession {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  taskId          String?
+  task            Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  taskDescription String
+
+  plannedDuration Int       // in minutes
+  actualDuration  Int?      // in minutes
+
+  startTime       DateTime  @default(now())
+  endTime         DateTime?
+
+  interruptions   Json?     // Array of interruption objects
+  backgroundSound String?
+
+  qualityRating   Int?      // 1-5
+  completedTask   Boolean   @default(false)
+  xpEarned        Int       @default(0)
+
+  @@index([userId])
+  @@index([startTime])
+  @@map("focus_sessions")
+}
+
+model CaptureItem {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  contentType     String    // text, voice, photo, link
+  textContent     String?
+  voiceUrl        String?
+  voiceTranscript String?
+  voiceDuration   Int?      // in seconds
+  photoUrl        String?
+  linkUrl         String?
+  linkMetadata    Json?
+
+  status          String    @default("pending") // pending, processed, dismissed
+  processedAt     DateTime?
+  convertedToType String?   // task, habit, note, event
+  convertedToId   String?
+
+  aiSuggestion    Json?
+
+  capturedAt      DateTime  @default(now())
+  source          String    @default("app") // app, widget, share, notification
+
+  @@index([userId])
+  @@index([status])
+  @@map("capture_items")
+}
+
+model MoodEntry {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  moodLevel   Int      // 1-5
+  energyLevel Int      // 1-5
+  descriptor  String?
+
+  timestamp   DateTime @default(now())
+
+  contextTaskId String?
+  tasksCompletedToday Int?
+  sleepLogged   Boolean?
+  exerciseLogged Boolean?
+  medicationTaken Boolean?
+
+  @@index([userId])
+  @@index([timestamp])
+  @@map("mood_entries")
+}
+
+model UserProgress {
+  id              String  @id @default(uuid())
+  userId          String  @unique
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  totalXp         Int     @default(0)
+  level           Int     @default(1)
+
+  progressMetaphor String @default("minimal") // minimal, garden, pet, adventure
+  petName         String?
+  petType         String?
+  petLevel        Int?
+  petHappiness    Int?
+
+  tasksCompleted  Int     @default(0)
+  focusMinutes    Int     @default(0)
+  habitsLogged    Int     @default(0)
+  routinesCompleted Int   @default(0)
+
+  currentStreak   Int     @default(0)
+  longestStreak   Int     @default(0)
+  lastActiveDate  DateTime?
+
+  @@map("user_progress")
+}
+
+model Badge {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  icon        String
+  category    String   // tasks, focus, habits, routines, streaks, special
+
+  criteriaType  String
+  criteriaValue Int
+  criteriaMetric String
+
+  rarity      String   @default("common") // common, uncommon, rare, epic, legendary
+
+  users       UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badgeId   String
+  badge     Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  earnedAt  DateTime @default(now())
+  isNew     Boolean  @default(true)
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+  @@map("user_badges")
+}
+
+model XPEvent {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  amount      Int
+  source      String   // task_complete, subtask_complete, focus_session, habit_log, etc.
+  sourceId    String?
+  description String
+
+  timestamp   DateTime @default(now())
+
+  @@index([userId])
+  @@index([timestamp])
+  @@map("xp_events")
+}
