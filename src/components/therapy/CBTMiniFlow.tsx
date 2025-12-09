@@ -66,13 +66,10 @@ export const CBTMiniFlow: React.FC<CBTMiniFlowProps> = ({
     activeIntervention,
   } = useTherapyStore();
   
-  const handleStartFlow = () => {
-    startIntervention(taskId, triggerType);
-  };
-  
+  // Start intervention on mount
   React.useEffect(() => {
-    handleStartFlow();
-  }, []);
+    startIntervention(taskId, triggerType);
+  }, [taskId, triggerType, startIntervention]);
   
   const handleToggleThought = (key: AvoidanceReason) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

@@ -142,7 +142,7 @@ export const XPPopup: React.FC<XPPopupProps> = ({
 
       return () => clearTimeout(hideTimeout);
     }
-  }, [visible, amount, reduceMotion, hapticFeedback, showXPPopups]);
+  }, [visible, amount, reduceMotion, hapticFeedback, showXPPopups, onHide]);
 
   const containerStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }, { scale: scale.value }],
