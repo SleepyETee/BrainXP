@@ -7,12 +7,13 @@ import {
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, gradients, shadows } from '../../theme/colors';
+import { StudyMode } from '../../types/study';
 
 interface StudyProgressProps {
   current: number;
   total: number;
   correct: number;
-  mode: 'review' | 'learn' | 'quiz';
+  mode: StudyMode;
   timeElapsed?: number; // seconds
 }
 
@@ -38,8 +39,10 @@ export const StudyProgress: React.FC<StudyProgressProps> = ({
         return { emoji: '🔄', label: 'Review Session', color: gradients.focus };
       case 'learn':
         return { emoji: '📚', label: 'Learning', color: gradients.growth };
-      case 'quiz':
-        return { emoji: '📝', label: 'Quiz', color: gradients.balance };
+      case 'cram':
+        return { emoji: '⚡', label: 'Cram Mode', color: gradients.energy };
+      case 'test':
+        return { emoji: '📝', label: 'Test', color: gradients.balance };
       default:
         return { emoji: '📚', label: 'Study', color: gradients.focus };
     }
@@ -59,7 +62,7 @@ export const StudyProgress: React.FC<StudyProgressProps> = ({
       <View style={styles.progressContainer}>
         <View style={styles.progressBar}>
           <LinearGradient
-            colors={modeInfo.color as [string, string]}
+            colors={[...modeInfo.color] as [string, string, ...string[]]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={[styles.progressFill, { width: `${progress}%` }]}

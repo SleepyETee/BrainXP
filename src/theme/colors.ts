@@ -160,42 +160,42 @@ export const colors = {
 // ═══════════════════════════════════════════════════════════════════════════════
 // GRADIENT PRESETS - Calming, ADHD-Friendly Transitions
 // ═══════════════════════════════════════════════════════════════════════════════
-export const gradients = {
+export const gradients: Record<string, string[]> = {
   // Primary gradients (calm focus)
-  focus: ['#93C0BA', '#7AB0A8', '#5E9A91'] as const,
-  focusSoft: ['#E1EFED', '#C3DFDB', '#A5CFC9'] as const,
-  
+  focus: ['#93C0BA', '#7AB0A8', '#5E9A91'],
+  focusSoft: ['#E1EFED', '#C3DFDB', '#A5CFC9'],
+
   // Success gradients (achievement)
-  growth: ['#CEE4B8', '#B8D89E', '#A2CC84'] as const,
-  complete: ['#8CC369', '#70A850', '#58853F'] as const,
-  
+  growth: ['#CEE4B8', '#B8D89E', '#A2CC84'],
+  complete: ['#8CC369', '#70A850', '#58853F'],
+
   // Energy gradients (use sparingly - for urgent/important)
-  energy: ['#EBACA4', '#E08F85', '#D57266'] as const,
-  warmth: ['#F7D9D5', '#EBACA4', '#E08F85'] as const,
-  
+  energy: ['#EBACA4', '#E08F85', '#D57266'],
+  warmth: ['#F7D9D5', '#EBACA4', '#E08F85'],
+
   // Calm gradients (backgrounds, cards)
-  calm: ['#F2F4F1', '#E5E8E3', '#D1D5CE'] as const,
-  serenity: ['#F0F7F6', '#E1EFED', '#C3DFDB'] as const,
-  
+  calm: ['#F2F4F1', '#E5E8E3', '#D1D5CE'],
+  serenity: ['#F0F7F6', '#E1EFED', '#C3DFDB'],
+
   // Mixed gradients (balanced energy)
-  balance: ['#93C0BA', '#CEE4B8', '#A2CC84'] as const,
-  morning: ['#EBACA4', '#F2F4F1', '#CEE4B8'] as const,
-  
+  balance: ['#93C0BA', '#CEE4B8', '#A2CC84'],
+  morning: ['#EBACA4', '#F2F4F1', '#CEE4B8'],
+
   // Premium feature gradients
-  achievement: ['#93C0BA', '#CEE4B8'] as const,
-  streak: ['#F5C842', '#E0A820'] as const,
-  
+  achievement: ['#93C0BA', '#CEE4B8'],
+  streak: ['#F5C842', '#E0A820'],
+
   // Dark mode gradients
-  darkCalm: ['#1A1C19', '#243D3A', '#375C57'] as const,
-  darkFocus: ['#121F1D', '#243D3A', '#4A7B74'] as const,
-  
+  darkCalm: ['#1A1C19', '#243D3A', '#375C57'],
+  darkFocus: ['#121F1D', '#243D3A', '#4A7B74'],
+
   // Glass effects
-  glassLight: ['rgba(242,244,241,0.95)', 'rgba(242,244,241,0.8)'] as const,
-  glassFocus: ['rgba(147,192,186,0.15)', 'rgba(147,192,186,0.05)'] as const,
-  
+  glassLight: ['rgba(242,244,241,0.95)', 'rgba(242,244,241,0.8)'],
+  glassFocus: ['rgba(147,192,186,0.15)', 'rgba(147,192,186,0.05)'],
+
   // Night/cosmic gradient for rest/sleep UI
-  cosmic: ['#1a1a2e', '#16213e', '#0f3460'] as const,
-} as const;
+  cosmic: ['#1a1a2e', '#16213e', '#0f3460'],
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SEMANTIC COLORS - Functional Color Assignments

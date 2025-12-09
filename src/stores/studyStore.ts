@@ -33,7 +33,7 @@ interface StudyState {
   isLoading: boolean;
   
   // Study Set Actions
-  createStudySet: (title: string, description?: string) => StudySet;
+  createStudySet: (input: { title: string; description?: string; icon?: string; color?: string }) => StudySet;
   updateStudySet: (id: string, updates: Partial<StudySet>) => void;
   deleteStudySet: (id: string) => void;
   fetchStudySets: () => Promise<void>;
@@ -106,13 +106,15 @@ export const useStudyStore = create<StudyState>()(
       // Study Set Actions
       // ═══════════════════════════════════════════════════════════════════════════
       
-      createStudySet: (title, description) => {
+      createStudySet: (input) => {
         const now = new Date().toISOString();
         const studySet: StudySet = {
           id: generateId(),
           userId: '1',
-          title,
-          description,
+          title: input.title,
+          description: input.description,
+          icon: input.icon,
+          color: input.color,
           isPublic: false,
           isFavorite: false,
           aiGenerated: false,
@@ -120,11 +122,11 @@ export const useStudyStore = create<StudyState>()(
           updatedAt: now,
           cards: [],
         };
-        
+
         set((state) => ({
           studySets: [...state.studySets, studySet],
         }));
-        
+
         return studySet;
       },
       

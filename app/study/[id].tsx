@@ -39,7 +39,7 @@ export default function StudySetDetailScreen() {
   const [timeElapsed, setTimeElapsed] = useState(0);
 
   const studySet = getStudySetById(id || '');
-  const cards = flashcards[id || ''] || [];
+  const cards = studySet?.cards || [];
   const progress = getSessionProgress();
 
   useEffect(() => {
@@ -97,7 +97,7 @@ export default function StudySetDetailScreen() {
       return (
         <View style={styles.container}>
           <LinearGradient
-            colors={gradients.focus as [string, string]}
+            colors={[...gradients.focus] as [string, string, ...string[]]}
             style={styles.completeGradient}
           >
             <Animated.View entering={FadeIn} style={styles.completeContent}>

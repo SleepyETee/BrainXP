@@ -96,12 +96,12 @@ export default function SettingsScreen() {
           <SettingRow
             icon="🔊"
             title="Default Focus Sound"
-            value={settings.defaultFocusSound || 'None'}
+            value={settings.defaultBackgroundSound || 'None'}
             onPress={() => {
               const sounds = ['none', 'rain', 'cafe', 'nature', 'white_noise'];
-              const currentIndex = sounds.indexOf(settings.defaultFocusSound || 'none');
+              const currentIndex = sounds.indexOf(settings.defaultBackgroundSound || 'none');
               const nextIndex = (currentIndex + 1) % sounds.length;
-              updateSettings({ defaultFocusSound: sounds[nextIndex] as any });
+              updateSettings({ defaultBackgroundSound: sounds[nextIndex] });
             }}
           />
         </View>
@@ -154,7 +154,7 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={styles.settingRow}
             onPress={() =>
-              updateSettings({ showXPAnimations: !settings.showXPAnimations })
+              updateSettings({ showXPPopups: !settings.showXPPopups })
             }
           >
             <Text style={styles.settingIcon}>✨</Text>
@@ -165,13 +165,13 @@ export default function SettingsScreen() {
             <View
               style={[
                 styles.toggle,
-                settings.showXPAnimations && styles.toggleActive,
+                settings.showXPPopups && styles.toggleActive,
               ]}
             >
               <View
                 style={[
                   styles.toggleKnob,
-                  settings.showXPAnimations && styles.toggleKnobActive,
+                  settings.showXPPopups && styles.toggleKnobActive,
                 ]}
               />
             </View>

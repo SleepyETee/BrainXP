@@ -71,7 +71,9 @@ export type XPSource =
   | 'breathing_exercise'
   | 'bonus_first_task'
   | 'bonus_all_habits'
-  | 'bonus_streak';
+  | 'bonus_streak'
+  | 'quiz_complete'
+  | 'study_session';
 
 export interface XPReward {
   source: XPSource;

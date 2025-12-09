@@ -34,7 +34,7 @@ export default function CreateStudySetScreen() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('📚');
-  const [selectedColor, setSelectedColor] = useState(colors.primary[500]);
+  const [selectedColor, setSelectedColor] = useState<string>(colors.primary[500]);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleCreate = async () => {
