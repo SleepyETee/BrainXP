@@ -25,7 +25,7 @@ interface StudyState {
   currentSession: StudySession | null;
   quizzes: Quiz[];
   quizAttempts: QuizAttempt[];
-  flashcards: Flashcard[];
+  flashcards: Record<string, Flashcard[]>;
   stats: StudyStats | null;
   activeSession: StudySession | null;
   sessionCards: Flashcard[];
@@ -74,7 +74,7 @@ export const useStudyStore = create<StudyState>()(
       currentSession: null,
       quizzes: [],
       quizAttempts: [],
-      flashcards: [],
+      flashcards: {},
       stats: null,
       activeSession: null,
       sessionCards: [],
@@ -88,7 +88,13 @@ export const useStudyStore = create<StudyState>()(
       fetchStudySets: async () => {
         set({ isLoading: true });
         // For now, just mark as loaded - data is persisted locally
-        set({ isLoading: false });
+        // Also sync flashcards from studySets
+        const { studySets } = get();
+        const flashcardsMap: Record<string, Flashcard[]> = {};
+        studySets.forEach((studySet) => {
+          flashcardsMap[studySet.id] = studySet.cards || [];
+        });
+        set({ isLoading: false, flashcards: flashcardsMap });
       },
       
       fetchStats: async () => {
@@ -125,11 +131,12 @@ export const useStudyStore = create<StudyState>()(
 
         set((state) => ({
           studySets: [...state.studySets, studySet],
+          flashcards: { ...state.flashcards, [studySet.id]: [] },
         }));
 
         return studySet;
       },
-      
+
       updateStudySet: (id, updates) => {
         set((state) => ({
           studySets: state.studySets.map((s) =>
@@ -141,9 +148,13 @@ export const useStudyStore = create<StudyState>()(
       },
       
       deleteStudySet: (id) => {
-        set((state) => ({
-          studySets: state.studySets.filter((s) => s.id !== id),
-        }));
+        set((state) => {
+          const { [id]: _, ...restFlashcards } = state.flashcards;
+          return {
+            studySets: state.studySets.filter((s) => s.id !== id),
+            flashcards: restFlashcards,
+          };
+        });
       },
       
       // ═══════════════════════════════════════════════════════════════════════════
@@ -179,41 +190,49 @@ export const useStudyStore = create<StudyState>()(
               ? { ...s, cards: [...s.cards, card], updatedAt: now }
               : s
           ),
+          flashcards: {
+            ...state.flashcards,
+            [studySetId]: [...(state.flashcards[studySetId] || []), card],
+          },
         }));
-        
+
         return card;
       },
-      
+
       updateFlashcard: (studySetId, cardId, updates) => {
-        set((state) => ({
-          studySets: state.studySets.map((s) =>
-            s.id === studySetId
-              ? {
-                  ...s,
-                  cards: s.cards.map((c) =>
-                    c.id === cardId
-                      ? { ...c, ...updates, updatedAt: new Date().toISOString() }
-                      : c
-                  ),
-                  updatedAt: new Date().toISOString(),
-                }
-              : s
-          ),
-        }));
+        set((state) => {
+          const updatedAt = new Date().toISOString();
+          const updateCard = (c: Flashcard) =>
+            c.id === cardId ? { ...c, ...updates, updatedAt } : c;
+          return {
+            studySets: state.studySets.map((s) =>
+              s.id === studySetId
+                ? { ...s, cards: s.cards.map(updateCard), updatedAt }
+                : s
+            ),
+            flashcards: {
+              ...state.flashcards,
+              [studySetId]: (state.flashcards[studySetId] || []).map(updateCard),
+            },
+          };
+        });
       },
       
       deleteFlashcard: (studySetId, cardId) => {
-        set((state) => ({
-          studySets: state.studySets.map((s) =>
-            s.id === studySetId
-              ? {
-                  ...s,
-                  cards: s.cards.filter((c) => c.id !== cardId),
-                  updatedAt: new Date().toISOString(),
-                }
-              : s
-          ),
-        }));
+        set((state) => {
+          const updatedAt = new Date().toISOString();
+          return {
+            studySets: state.studySets.map((s) =>
+              s.id === studySetId
+                ? { ...s, cards: s.cards.filter((c) => c.id !== cardId), updatedAt }
+                : s
+            ),
+            flashcards: {
+              ...state.flashcards,
+              [studySetId]: (state.flashcards[studySetId] || []).filter((c) => c.id !== cardId),
+            },
+          };
+        });
       },
       
       reviewFlashcard: (studySetId, cardId, quality) => {

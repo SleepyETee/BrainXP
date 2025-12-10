@@ -1,43 +1,70 @@
 import { Tabs } from 'expo-router';
-import { View, Text, StyleSheet } from 'react-native';
-import { colors } from '../../src/theme/colors';
+import { View, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
+import { useTheme } from '../../src/contexts/ThemeContext';
 
 type TabIconProps = {
-  name: string;
+  name: keyof typeof Ionicons.glyphMap;
   focused: boolean;
-  emoji: string;
+  color: string;
 };
 
-function TabIcon({ name, focused, emoji }: TabIconProps) {
+function TabIcon({ name, focused, color }: TabIconProps) {
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          scale: withSpring(focused ? 1.1 : 1, {
+            damping: 15,
+            stiffness: 200,
+          }),
+        },
+      ],
+    };
+  });
+
   return (
-    <View style={styles.tabIconContainer}>
-      <Text style={[styles.tabEmoji, focused && styles.tabEmojiActive]}>
-        {emoji}
-      </Text>
-      <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>
-        {name}
-      </Text>
-    </View>
+    <Animated.View style={[styles.tabIconContainer, animatedStyle]}>
+      <Ionicons name={name} size={24} color={color} />
+      {focused && <View style={[styles.activeIndicator, { backgroundColor: color }]} />}
+    </Animated.View>
   );
 }
 
 export default function TabLayout() {
+  const { theme, isDark } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
-        tabBarShowLabel: false,
-        tabBarActiveTintColor: colors.primary[500],
-        tabBarInactiveTintColor: colors.gray[400],
+        tabBarStyle: [
+          styles.tabBar,
+          {
+            backgroundColor: isDark ? theme.surface : '#FFFFFF',
+            borderTopColor: theme.border,
+          },
+        ],
+        tabBarShowLabel: true,
+        tabBarLabelStyle: styles.tabLabel,
+        tabBarActiveTintColor: theme.primary[500],
+        tabBarInactiveTintColor: theme.gray[400],
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="Home" focused={focused} emoji="🏠" />
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon
+              name={focused ? 'home' : 'home-outline'}
+              focused={focused}
+              color={color}
+            />
           ),
         }}
       />
@@ -45,8 +72,12 @@ export default function TabLayout() {
         name="tasks"
         options={{
           title: 'Tasks',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="Tasks" focused={focused} emoji="✅" />
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon
+              name={focused ? 'checkbox' : 'checkbox-outline'}
+              focused={focused}
+              color={color}
+            />
           ),
         }}
       />
@@ -54,8 +85,12 @@ export default function TabLayout() {
         name="habits"
         options={{
           title: 'Habits',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="Habits" focused={focused} emoji="🔄" />
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon
+              name={focused ? 'refresh-circle' : 'refresh-circle-outline'}
+              focused={focused}
+              color={color}
+            />
           ),
         }}
       />
@@ -63,8 +98,12 @@ export default function TabLayout() {
         name="more"
         options={{
           title: 'More',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="More" focused={focused} emoji="⚙️" />
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon
+              name={focused ? 'grid' : 'grid-outline'}
+              focused={focused}
+              color={color}
+            />
           ),
         }}
       />
@@ -74,32 +113,27 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: colors.gray[100],
-    height: 80,
+    height: 85,
     paddingTop: 8,
-    paddingBottom: 20,
+    paddingBottom: 25,
+    elevation: 0,
+    shadowOpacity: 0,
   },
   tabIconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
   },
-  tabEmoji: {
-    fontSize: 24,
-    opacity: 0.6,
-  },
-  tabEmojiActive: {
-    opacity: 1,
+  activeIndicator: {
+    position: 'absolute',
+    bottom: -8,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
   },
   tabLabel: {
     fontSize: 11,
     fontWeight: '500',
-    color: colors.gray[400],
-  },
-  tabLabelActive: {
-    color: colors.primary[500],
-    fontWeight: '600',
+    marginTop: 4,
   },
 });

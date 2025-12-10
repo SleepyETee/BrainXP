@@ -199,8 +199,8 @@ export default function MagicBreakdownScreen() {
                   </View>
                   <Text style={styles.stepEmoji}>{step.emoji}</Text>
                   <View style={styles.stepMeta}>
-                    <Text style={styles.stepTime}>~{step.estimatedMinutes}m</Text>
-                    <Text style={styles.stepSpoons}>{'🥄'.repeat(step.spoons)}</Text>
+                    <Text style={styles.stepTime}>~{step.estimatedMinutes ?? 5}m</Text>
+                    <Text style={styles.stepSpoons}>{'🥄'.repeat(step.spoons ?? 1)}</Text>
                   </View>
                 </View>
                 <Text style={styles.stepTitle}>{step.title}</Text>
@@ -229,12 +229,12 @@ export default function MagicBreakdownScreen() {
             </View>
 
             {/* Checkpoints */}
-            {result.progressCheckpoints.length > 0 && (
+            {result.progressCheckpoints && result.progressCheckpoints.length > 0 && (
               <View style={styles.checkpointsCard}>
                 <Text style={styles.checkpointsTitle}>🎯 Celebration Points</Text>
                 {result.progressCheckpoints.map((checkpoint, index) => (
                   <Text key={index} style={styles.checkpoint}>
-                    • {checkpoint}
+                    • {typeof checkpoint === 'string' ? checkpoint : checkpoint.message}
                   </Text>
                 ))}
               </View>

@@ -3,6 +3,7 @@ import {
   View,
   StyleSheet,
   ViewStyle,
+  StyleProp,
   TouchableOpacity,
   TouchableOpacityProps,
 } from 'react-native';
@@ -17,7 +18,7 @@ interface CardProps {
   variant?: CardVariant;
   padding?: CardPadding;
   onPress?: () => void;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   disabled?: boolean;
 }
 

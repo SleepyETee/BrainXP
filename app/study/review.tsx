@@ -98,12 +98,14 @@ export default function StudyReviewScreen() {
   };
 
   const handleEndSession = async () => {
-    const session = await endStudySession();
-    
-    if (session) {
-      await addXP(session.xpEarned, 'study_session', 'Completed study session');
+    const currentSession = activeSession;
+    endStudySession();
+
+    if (currentSession) {
+      const xpEarned = currentSession.cardsCorrect * 5 + currentSession.cardsReviewed * 2;
+      await addXP(xpEarned, 'study_session', 'Completed study session');
     }
-    
+
     setIsStudying(false);
     setSessionComplete(true);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
