@@ -95,7 +95,7 @@ export interface SpoonEstimatorOutput {
     mental: number;
     emotional: number;
   };
-  factors?: { name: string; impact: number; description?: string }[];
+  factors?: { name: string; impact: 'low' | 'medium' | 'high'; description?: string }[];
   tips: string[];
   suggestions?: string[];
   bestTimeOfDay?: 'morning' | 'afternoon' | 'evening';

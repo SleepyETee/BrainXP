@@ -208,19 +208,35 @@ export const ToneRewriter: React.FC<ToneRewriterProps> = ({
           {result.changes.length > 0 && (
             <View style={styles.changesSection}>
               <Text style={styles.changesTitle}>🔄 Key Changes Made</Text>
-              {result.changes.map((change, index) => (
-                <View key={index} style={styles.change}>
-                  <View style={styles.changeRow}>
-                    <Text style={styles.changeLabel}>Before:</Text>
-                    <Text style={styles.changeOriginal}>{change.original}</Text>
+              {result.changes.map((change, index) => {
+                // Handle both string and object types for changes
+                if (typeof change === 'string') {
+                  return (
+                    <View key={index} style={styles.change}>
+                      <Text style={styles.changeReason}>💡 {change}</Text>
+                    </View>
+                  );
+                }
+                return (
+                  <View key={index} style={styles.change}>
+                    {change.original && (
+                      <View style={styles.changeRow}>
+                        <Text style={styles.changeLabel}>Before:</Text>
+                        <Text style={styles.changeOriginal}>{change.original}</Text>
+                      </View>
+                    )}
+                    {change.changed && (
+                      <View style={styles.changeRow}>
+                        <Text style={styles.changeLabel}>After:</Text>
+                        <Text style={styles.changeNew}>{change.changed}</Text>
+                      </View>
+                    )}
+                    {change.reason && (
+                      <Text style={styles.changeReason}>💡 {change.reason}</Text>
+                    )}
                   </View>
-                  <View style={styles.changeRow}>
-                    <Text style={styles.changeLabel}>After:</Text>
-                    <Text style={styles.changeNew}>{change.changed}</Text>
-                  </View>
-                  <Text style={styles.changeReason}>💡 {change.reason}</Text>
-                </View>
-              ))}
+                );
+              })}
             </View>
           )}
 

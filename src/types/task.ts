@@ -75,6 +75,13 @@ export interface UpdateTaskInput extends Partial<CreateTaskInput> {
   links?: string[];
   reminders?: Reminder[];
   recurrence?: RecurrenceRule;
+  subtasks?: {
+    id: string;
+    title: string;
+    status: TaskStatus;
+    order: number;
+    estimatedMinutes?: number;
+  }[];
 }
 
 export interface AIDecompositionResult {
