@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,18 +8,30 @@ import {
   TextInput,
   Modal,
   ScrollView,
+  Dimensions,
 } from 'react-native';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { useFocusStore } from '../../src/stores/focusStore';
 import { useTaskStore } from '../../src/stores/taskStore';
 import { useTherapyStore } from '../../src/stores/therapyStore';
 import { Button } from '../../src/components/ui/Button';
 import { GroundingExercise, FocusSessionPlanner } from '../../src/components/therapy';
-import { colors } from '../../src/theme/colors';
+import { colors, gradients } from '../../src/theme/colors';
 
-// Timer mode presets - includes ADHD-friendly alternatives
-// Research: Different timer lengths work better for different people
-const TIMER_MODES = {
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Default Timer mode presets - used as fallback
+const DEFAULT_TIMER_MODES = {
   pomodoro: {
     label: 'Pomodoro',
     description: '25 min work, 5 min break',
@@ -50,7 +62,7 @@ const TIMER_MODES = {
   },
 } as const;
 
-type TimerMode = keyof typeof TIMER_MODES;
+type TimerMode = keyof typeof DEFAULT_TIMER_MODES | string;
 
 const DURATION_PRESETS = [
   { label: '5 min', value: 5, forMode: 'custom' },
@@ -72,6 +84,41 @@ const SOUND_OPTIONS = [
   { id: 'lo_fi', label: 'Lo-Fi', emoji: '🎵' },
 ];
 
+// Animated selection chip
+const SelectionChip: React.FC<{
+  selected: boolean;
+  onPress: () => void;
+  children: React.ReactNode;
+  style?: any;
+}> = ({ selected, onPress, children, style }) => {
+  const scale = useSharedValue(1);
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.95, { damping: 15 });
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, { damping: 15 });
+  };
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      activeOpacity={1}
+    >
+      <Animated.View style={[style, animatedStyle]}>
+        {children}
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
 export default function FocusSetupScreen() {
   const router = useRouter();
   const { taskId, taskTitle } = useLocalSearchParams<{
@@ -81,18 +128,58 @@ export default function FocusSetupScreen() {
 
   const startSession = useFocusStore((state) => state.startSession);
   const getTaskById = useTaskStore((state) => state.getTaskById);
+  const presets = useFocusStore((state) => state.presets);
+  const fetchPresets = useFocusStore((state) => state.fetchPresets);
 
-  const [selectedMode, setSelectedMode] = useState<TimerMode>('pomodoro');
-  const [duration, setDuration] = useState<number>(TIMER_MODES.pomodoro.workDuration);
+  const derivedModes = useMemo(() => {
+    if (presets && presets.length) {
+      const entries = presets.map((preset) => [
+        preset.id,
+        {
+          label: preset.label,
+          description: `${preset.work} min focus • ${preset.shortBreak} min break`,
+          emoji: '⏱️',
+          workDuration: preset.work,
+          breakDuration: preset.shortBreak,
+        },
+      ]);
+      return Object.fromEntries(entries) as Record<
+        string,
+        { label: string; description: string; emoji: string; workDuration: number; breakDuration: number }
+      >;
+    }
+    return DEFAULT_TIMER_MODES;
+  }, [presets]);
+
+  const modeKeys = useMemo(() => Object.keys(derivedModes), [derivedModes]);
+  const defaultModeKey = modeKeys[0] as TimerMode;
+
+  const [selectedMode, setSelectedMode] = useState<TimerMode>(defaultModeKey);
+  const [duration, setDuration] = useState<number>(derivedModes[defaultModeKey as keyof typeof derivedModes]?.workDuration ?? 25);
   const [customTask, setCustomTask] = useState('');
   const [selectedSound, setSelectedSound] = useState('none');
   const [showModeInfo, setShowModeInfo] = useState(false);
 
   // Update duration when mode changes
-  const handleModeChange = (mode: TimerMode) => {
+  const handleModeChange = async (mode: TimerMode) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedMode(mode);
-    setDuration(TIMER_MODES[mode].workDuration);
+    const modeConfig = derivedModes[mode as keyof typeof derivedModes];
+    if (modeConfig) {
+      setDuration(modeConfig.workDuration);
+    }
   };
+
+  const handleDurationChange = async (value: number) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setDuration(value);
+  };
+
+  const handleSoundChange = async (soundId: string) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedSound(soundId);
+  };
+
   const [mindfulStart, setMindfulStart] = useState(true);
   const [showGrounding, setShowGrounding] = useState(false);
   const [showPlanner, setShowPlanner] = useState(false);
@@ -139,185 +226,265 @@ export default function FocusSetupScreen() {
     router.replace('/focus/active');
   };
 
+  useEffect(() => {
+    fetchPresets();
+  }, [fetchPresets]);
+
+  useEffect(() => {
+    const newDefault = (Object.keys(derivedModes)[0] || defaultModeKey) as TimerMode;
+    setSelectedMode(newDefault);
+    const modeConfig = derivedModes[newDefault as keyof typeof derivedModes];
+    if (modeConfig) {
+      setDuration(modeConfig.workDuration);
+    }
+  }, [derivedModes]);
+
   return (
     <SafeAreaView style={styles.container}>
+      {/* Gradient Background */}
+      <LinearGradient
+        colors={[colors.primary[50], '#FFFFFF', '#FFFFFF']}
+        locations={[0, 0.3, 1]}
+        style={styles.backgroundGradient}
+      />
+
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+      <Animated.View entering={FadeIn.delay(100)} style={styles.header}>
+        <TouchableOpacity 
+          onPress={() => router.back()}
+          style={styles.closeButtonContainer}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Text style={styles.closeButton}>✕</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Start Focus Session</Text>
+        <View style={styles.headerCenter}>
+          <Text style={styles.title}>Focus Session</Text>
+          <Text style={styles.headerSubtitle}>Set up your session</Text>
+        </View>
         <View style={styles.placeholder} />
-      </View>
+      </Animated.View>
 
-      <View style={styles.content}>
-        {/* Task */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>What are you focusing on?</Text>
+      {/* Scrollable Content */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Task Section */}
+        <Animated.View entering={FadeInDown.delay(150)} style={styles.section}>
+          <Text style={styles.sectionLabel}>WHAT ARE YOU FOCUSING ON?</Text>
           {task ? (
             <View style={styles.taskCard}>
-              <Text style={styles.taskTitle}>{task.title}</Text>
-              {task.estimatedMinutes && (
-                <Text style={styles.taskMeta}>
-                  Estimated: {task.estimatedMinutes} min
-                </Text>
-              )}
+              <LinearGradient
+                colors={[colors.primary[50], '#FFFFFF']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.taskCardGradient}
+              >
+                <View style={styles.taskIconContainer}>
+                  <Text style={styles.taskEmoji}>🎯</Text>
+                </View>
+                <View style={styles.taskInfo}>
+                  <Text style={styles.taskTitle} numberOfLines={2}>{task.title}</Text>
+                  {task.estimatedMinutes && (
+                    <Text style={styles.taskMeta}>
+                      ⏱️ {task.estimatedMinutes} min estimated
+                    </Text>
+                  )}
+                </View>
+              </LinearGradient>
             </View>
           ) : (
-            <TextInput
-              style={styles.taskInput}
-              placeholder="Enter what you'll work on..."
-              value={customTask}
-              onChangeText={setCustomTask}
-              placeholderTextColor={colors.gray[400]}
-            />
+            <View style={styles.taskInputContainer}>
+              <Text style={styles.taskInputIcon}>✏️</Text>
+              <TextInput
+                style={styles.taskInput}
+                placeholder="What will you work on?"
+                value={customTask}
+                onChangeText={setCustomTask}
+                placeholderTextColor={colors.gray[400]}
+                multiline={false}
+              />
+            </View>
           )}
-        </View>
+        </Animated.View>
 
-        {/* Timer Mode Selection - ADHD-friendly options */}
-        <View style={styles.section}>
+        {/* Timer Mode Selection */}
+        <Animated.View entering={FadeInDown.delay(250)} style={styles.section}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Timer Mode</Text>
+            <Text style={styles.sectionLabel}>TIMER MODE</Text>
             <TouchableOpacity
               onPress={() => setShowModeInfo(!showModeInfo)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityLabel="Show timer mode information"
+              style={styles.infoButtonContainer}
             >
-              <Text style={styles.infoButton}>ℹ️</Text>
+              <Text style={styles.infoButton}>{showModeInfo ? '✕' : 'ℹ️'}</Text>
             </TouchableOpacity>
           </View>
           
           {showModeInfo && (
-            <View style={styles.infoCard}>
+            <Animated.View entering={FadeIn} style={styles.infoCard}>
               <Text style={styles.infoText}>
                 💡 Different timer lengths work for different people and tasks. The 10-3 rule is great when you're struggling to start. Pomodoro works well for moderate tasks. Deep work is for when you're in flow.
               </Text>
-            </View>
+            </Animated.View>
           )}
 
           <View style={styles.modeGrid}>
-            {(Object.keys(TIMER_MODES) as TimerMode[]).map((mode) => {
-              const config = TIMER_MODES[mode];
+            {modeKeys.map((mode) => {
+              const config = derivedModes[mode as keyof typeof derivedModes];
+              const isSelected = selectedMode === mode;
               return (
-                <TouchableOpacity
+                <SelectionChip
                   key={mode}
+                  selected={isSelected}
+                  onPress={() => handleModeChange(mode)}
                   style={[
                     styles.modeButton,
-                    selectedMode === mode && styles.modeButtonActive,
+                    isSelected && styles.modeButtonActive,
                   ]}
-                  onPress={() => handleModeChange(mode)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: selectedMode === mode }}
-                  accessibilityLabel={`${config.label}: ${config.description}`}
                 >
-                  <Text style={styles.modeEmoji}>{config.emoji}</Text>
-                  <Text
-                    style={[
-                      styles.modeLabel,
-                      selectedMode === mode && styles.modeLabelActive,
-                    ]}
-                  >
+                  <View style={[styles.modeIconContainer, isSelected && styles.modeIconContainerActive]}>
+                    <Text style={styles.modeEmoji}>{config.emoji}</Text>
+                  </View>
+                  <Text style={[styles.modeLabel, isSelected && styles.modeLabelActive]}>
                     {config.label}
                   </Text>
-                  <Text style={styles.modeDescription}>
-                    {config.workDuration}m work
+                  <Text style={[styles.modeDescription, isSelected && styles.modeDescriptionActive]}>
+                    {config.workDuration}m
                   </Text>
-                </TouchableOpacity>
+                  {isSelected && (
+                    <View style={styles.selectedIndicator}>
+                      <Text style={styles.selectedCheck}>✓</Text>
+                    </View>
+                  )}
+                </SelectionChip>
               );
             })}
           </View>
-        </View>
+        </Animated.View>
 
         {/* Duration Fine-tuning */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Duration</Text>
-          <View style={styles.durationGrid}>
-            {DURATION_PRESETS.map((preset) => (
-              <TouchableOpacity
-                key={preset.value}
-                style={[
-                  styles.durationButton,
-                  duration === preset.value && styles.durationButtonActive,
-                ]}
-                onPress={() => setDuration(preset.value)}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: duration === preset.value }}
-              >
-                <Text
+        <Animated.View entering={FadeInDown.delay(350)} style={styles.section}>
+          <Text style={styles.sectionLabel}>ADJUST DURATION</Text>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.durationScrollContent}
+          >
+            {DURATION_PRESETS.map((preset) => {
+              const isSelected = duration === preset.value;
+              return (
+                <SelectionChip
+                  key={preset.value}
+                  selected={isSelected}
+                  onPress={() => handleDurationChange(preset.value)}
                   style={[
-                    styles.durationText,
-                    duration === preset.value && styles.durationTextActive,
+                    styles.durationButton,
+                    isSelected && styles.durationButtonActive,
                   ]}
                 >
-                  {preset.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Text style={[styles.durationText, isSelected && styles.durationTextActive]}>
+                    {preset.label}
+                  </Text>
+                </SelectionChip>
+              );
+            })}
+          </ScrollView>
+          <View style={styles.durationHintContainer}>
+            <Text style={styles.durationHint}>
+              💪 Start small! Even 10 minutes counts. You can always extend.
+            </Text>
           </View>
-          <Text style={styles.durationHint}>
-            💪 Start small! Even 10 minutes counts. You can always extend.
-          </Text>
-        </View>
+        </Animated.View>
 
-        {/* Sound */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Background sound</Text>
-          <View style={styles.soundGrid}>
-            {SOUND_OPTIONS.map((sound) => (
-              <TouchableOpacity
-                key={sound.id}
-                style={[
-                  styles.soundButton,
-                  selectedSound === sound.id && styles.soundButtonActive,
-                ]}
-                onPress={() => setSelectedSound(sound.id)}
-              >
-                <Text style={styles.soundEmoji}>{sound.emoji}</Text>
-                <Text
+        {/* Sound Selection */}
+        <Animated.View entering={FadeInDown.delay(450)} style={styles.section}>
+          <Text style={styles.sectionLabel}>BACKGROUND SOUND</Text>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.soundScrollContent}
+          >
+            {SOUND_OPTIONS.map((sound) => {
+              const isSelected = selectedSound === sound.id;
+              return (
+                <SelectionChip
+                  key={sound.id}
+                  selected={isSelected}
+                  onPress={() => handleSoundChange(sound.id)}
                   style={[
-                    styles.soundLabel,
-                    selectedSound === sound.id && styles.soundLabelActive,
+                    styles.soundButton,
+                    isSelected && styles.soundButtonActive,
                   ]}
                 >
-                  {sound.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+                  <Text style={styles.soundEmoji}>{sound.emoji}</Text>
+                  <Text style={[styles.soundLabel, isSelected && styles.soundLabelActive]}>
+                    {sound.label}
+                  </Text>
+                </SelectionChip>
+              );
+            })}
+          </ScrollView>
+        </Animated.View>
 
         {/* Mindful Start Toggle */}
-        <View style={styles.section}>
+        <Animated.View entering={FadeInDown.delay(550)} style={styles.section}>
           <TouchableOpacity
-            style={styles.mindfulToggle}
-            onPress={() => setMindfulStart(!mindfulStart)}
+            style={[styles.mindfulToggle, mindfulStart && styles.mindfulToggleActive]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setMindfulStart(!mindfulStart);
+            }}
+            activeOpacity={0.8}
           >
             <View style={styles.mindfulContent}>
-              <Text style={styles.mindfulEmoji}>🧘</Text>
+              <View style={[styles.mindfulIconContainer, mindfulStart && styles.mindfulIconContainerActive]}>
+                <Text style={styles.mindfulEmoji}>🧘</Text>
+              </View>
               <View style={styles.mindfulText}>
-                <Text style={styles.mindfulTitle}>Mindful start</Text>
+                <Text style={[styles.mindfulTitle, mindfulStart && styles.mindfulTitleActive]}>
+                  Mindful Start
+                </Text>
                 <Text style={styles.mindfulSubtitle}>
-                  Quick grounding before you begin
+                  Quick grounding exercise before you begin
                 </Text>
               </View>
             </View>
             <View style={[styles.toggle, mindfulStart && styles.toggleActive]}>
-              <View style={[styles.toggleDot, mindfulStart && styles.toggleDotActive]} />
+              <Animated.View style={[styles.toggleDot, mindfulStart && styles.toggleDotActive]} />
             </View>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
-        {/* Start Button */}
-        <View style={styles.cta}>
-          <Button
-            title={mindfulStart ? `Ground & Start ${duration} min` : `Start ${duration} min Session`}
-            onPress={handleStart}
-            fullWidth
-            size="lg"
-            disabled={!taskDescription.trim()}
-          />
-        </View>
-      </View>
+        {/* Bottom spacer */}
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
+
+      {/* Fixed CTA Button */}
+      <Animated.View entering={FadeInUp.delay(600)} style={styles.ctaContainer}>
+        <LinearGradient
+          colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.9)', '#FFFFFF']}
+          locations={[0, 0.3, 0.5]}
+          style={styles.ctaGradient}
+        >
+          <View style={styles.cta}>
+            <Button
+              title={mindfulStart ? `🧘 Ground & Start (${duration}m)` : `🚀 Start Focus (${duration}m)`}
+              onPress={handleStart}
+              fullWidth
+              size="lg"
+              gradient
+              disabled={!taskDescription.trim()}
+            />
+            {!taskDescription.trim() && (
+              <Text style={styles.ctaHint}>Enter a task to continue</Text>
+            )}
+          </View>
+        </LinearGradient>
+      </Animated.View>
 
       {/* Grounding Modal */}
       <Modal
@@ -361,34 +528,56 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  backgroundGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray[200],
+    paddingVertical: 12,
+    backgroundColor: 'transparent',
+  },
+  headerCenter: {
+    alignItems: 'center',
+  },
+  closeButtonContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.gray[100],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   closeButton: {
-    fontSize: 24,
-    color: colors.gray[500],
-    width: 32,
+    fontSize: 18,
+    color: colors.gray[600],
+    fontWeight: '600',
   },
   title: {
     fontSize: 18,
-    fontWeight: '600',
-    color: colors.gray[800],
+    fontWeight: '700',
+    color: colors.gray[900],
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: colors.gray[500],
+    marginTop: 2,
   },
   placeholder: {
-    width: 32,
+    width: 40,
   },
-  content: {
+  scrollView: {
     flex: 1,
-    padding: 20,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 140,
   },
   section: {
-    marginBottom: 32,
+    marginBottom: 24,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -396,57 +585,155 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.gray[800],
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.gray[500],
+    letterSpacing: 0.5,
+    marginBottom: 12,
+  },
+  infoButtonContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.gray[100],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   infoButton: {
-    fontSize: 18,
+    fontSize: 14,
   },
   infoCard: {
     backgroundColor: colors.primary[50],
-    borderRadius: 10,
-    padding: 12,
+    borderRadius: 12,
+    padding: 14,
     marginBottom: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.primary[400],
+    borderWidth: 1,
+    borderColor: colors.primary[100],
   },
   infoText: {
-    fontSize: 13,
+    fontSize: 14,
     color: colors.primary[700],
-    lineHeight: 19,
+    lineHeight: 20,
   },
-  // Timer mode selection
+
+  // Task styles
+  taskCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: colors.primary[200],
+    shadowColor: colors.primary[500],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  taskCardGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  taskIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  taskEmoji: {
+    fontSize: 24,
+  },
+  taskInfo: {
+    flex: 1,
+  },
+  taskTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.gray[800],
+    lineHeight: 22,
+  },
+  taskMeta: {
+    fontSize: 13,
+    color: colors.gray[500],
+    marginTop: 4,
+  },
+  taskInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.gray[50],
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.gray[200],
+    paddingHorizontal: 14,
+  },
+  taskInputIcon: {
+    fontSize: 18,
+    marginRight: 10,
+  },
+  taskInput: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.gray[800],
+    paddingVertical: 14,
+  },
+
+  // Mode grid - 2x2 layout
   modeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 8,
+    marginHorizontal: -6,
   },
   modeButton: {
-    width: '48%',
+    width: (SCREEN_WIDTH - 52) / 2,
+    marginHorizontal: 6,
+    marginBottom: 12,
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 12,
     borderRadius: 14,
     backgroundColor: colors.gray[50],
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: colors.gray[200],
+    position: 'relative',
   },
   modeButtonActive: {
-    borderColor: colors.primary[500],
+    borderColor: colors.primary[400],
     backgroundColor: colors.primary[50],
+    shadowColor: colors.primary[500],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  modeIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: colors.gray[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  modeIconContainerActive: {
+    backgroundColor: colors.primary[100],
   },
   modeEmoji: {
-    fontSize: 24,
-    marginBottom: 6,
+    fontSize: 22,
   },
   modeLabel: {
     fontSize: 14,
     fontWeight: '700',
     color: colors.gray[700],
     marginBottom: 2,
+    textAlign: 'center',
   },
   modeLabelActive: {
     color: colors.primary[700],
@@ -454,123 +741,157 @@ const styles = StyleSheet.create({
   modeDescription: {
     fontSize: 12,
     color: colors.gray[500],
-  },
-  taskCard: {
-    backgroundColor: colors.gray[50],
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.gray[200],
-  },
-  taskTitle: {
-    fontSize: 16,
     fontWeight: '500',
-    color: colors.gray[800],
   },
-  taskMeta: {
-    fontSize: 13,
-    color: colors.gray[500],
-    marginTop: 4,
+  modeDescriptionActive: {
+    color: colors.primary[600],
   },
-  taskInput: {
-    fontSize: 16,
-    color: colors.gray[800],
-    backgroundColor: colors.gray[50],
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.gray[200],
+  selectedIndicator: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.primary[500],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  durationGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+  selectedCheck: {
+    fontSize: 11,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+
+  // Duration styles - horizontal scroll
+  durationScrollContent: {
+    paddingRight: 20,
   },
   durationButton: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    marginRight: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
     borderRadius: 12,
     backgroundColor: colors.gray[100],
-    minWidth: '30%',
-    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.gray[200],
   },
   durationButtonActive: {
     backgroundColor: colors.primary[500],
+    borderColor: colors.primary[500],
+    shadowColor: colors.primary[500],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   durationText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
     color: colors.gray[700],
   },
   durationTextActive: {
     color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  durationHintContainer: {
+    marginTop: 12,
+    backgroundColor: colors.success[50],
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.success[100],
   },
   durationHint: {
     fontSize: 13,
-    color: colors.gray[500],
-    marginTop: 12,
+    color: colors.success[700],
+    lineHeight: 18,
     textAlign: 'center',
   },
-  soundGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+
+  // Sound styles - horizontal scroll
+  soundScrollContent: {
+    paddingRight: 20,
   },
   soundButton: {
-    width: '30%',
+    marginRight: 10,
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderRadius: 12,
     backgroundColor: colors.gray[50],
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.gray[200],
+    minWidth: 80,
   },
   soundButtonActive: {
-    borderColor: colors.primary[500],
+    borderColor: colors.primary[400],
     backgroundColor: colors.primary[50],
+    shadowColor: colors.primary[500],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   soundEmoji: {
     fontSize: 24,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   soundLabel: {
     fontSize: 12,
     color: colors.gray[600],
+    fontWeight: '500',
   },
   soundLabelActive: {
     color: colors.primary[700],
     fontWeight: '600',
   },
-  cta: {
-    marginTop: 'auto',
-  },
-  // Mindful start toggle styles
+
+  // Mindful toggle
   mindfulToggle: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    backgroundColor: colors.primary[50],
+    backgroundColor: colors.gray[50],
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.primary[100],
+    borderWidth: 1.5,
+    borderColor: colors.gray[200],
+  },
+  mindfulToggleActive: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[200],
   },
   mindfulContent: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
+  mindfulIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: colors.gray[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  mindfulIconContainerActive: {
+    backgroundColor: colors.primary[100],
+  },
   mindfulEmoji: {
-    fontSize: 28,
-    marginRight: 14,
+    fontSize: 22,
   },
   mindfulText: {
     flex: 1,
   },
   mindfulTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.gray[800],
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.gray[700],
+  },
+  mindfulTitleActive: {
+    color: colors.primary[700],
   },
   mindfulSubtitle: {
     fontSize: 13,
@@ -578,10 +899,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   toggle: {
-    width: 52,
+    width: 50,
     height: 28,
     borderRadius: 14,
-    backgroundColor: colors.gray[200],
+    backgroundColor: colors.gray[300],
     justifyContent: 'center',
     padding: 2,
   },
@@ -593,9 +914,40 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
   },
   toggleDotActive: {
     alignSelf: 'flex-end',
+  },
+
+  // CTA
+  ctaContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  ctaGradient: {
+    paddingTop: 24,
+  },
+  cta: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingBottom: 34,
+    paddingTop: 4,
+  },
+  ctaHint: {
+    fontSize: 12,
+    color: colors.gray[500],
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  bottomSpacer: {
+    height: 20,
   },
 });
 
