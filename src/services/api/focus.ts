@@ -5,6 +5,8 @@ import {
   EndFocusSessionInput,
   FocusSessionResult,
   FocusStats,
+  FocusTimerPreset,
+  FocusWidgetSummary,
 } from '../../types/focus';
 import { ApiResponse, DateRange } from '../../types';
 
@@ -103,4 +105,14 @@ export const getTodayMinutes = async (): Promise<number> => {
 
 export const deleteSession = async (id: string): Promise<void> => {
   await apiClient.delete(`/focus/sessions/${id}`);
+};
+
+export const getPresets = async (): Promise<FocusTimerPreset[]> => {
+  const response = await apiClient.get<ApiResponse<{ presets: FocusTimerPreset[] }>>('/focus/presets');
+  return response.data.data.presets;
+};
+
+export const getFocusWidgetSummary = async (): Promise<FocusWidgetSummary> => {
+  const response = await apiClient.get<ApiResponse<FocusWidgetSummary>>('/focus/widgets/summary');
+  return response.data.data;
 };

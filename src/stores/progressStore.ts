@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuthStore } from './authStore';
 import {
   UserProgress,
   Badge,
@@ -39,6 +40,7 @@ interface ProgressState {
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
+const getUserId = () => useAuthStore.getState().user?.id || 'local-user';
 
 const calculateLevel = (totalXp: number): number => {
   for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
@@ -70,7 +72,7 @@ export const useProgressStore = create<ProgressState>()(
 
         const initialProgress: UserProgress = {
           id: generateId(),
-          userId: '1', // TODO: Get from auth store
+          userId: getUserId(),
           totalXp: 0,
           level: 1,
           xpToNextLevel: LEVEL_THRESHOLDS[1],

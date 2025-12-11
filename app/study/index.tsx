@@ -57,7 +57,7 @@ export default function StudyHubScreen() {
         {/* Stats Overview */}
         <Animated.View entering={FadeInDown.delay(100)}>
           <LinearGradient
-            colors={gradients.focus as [string, string]}
+            colors={[...gradients.focus]}
             style={styles.statsCard}
           >
             <View style={styles.statsRow}>

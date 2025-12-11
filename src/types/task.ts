@@ -1,6 +1,7 @@
 export type TaskStatus = 'inbox' | 'todo' | 'in_progress' | 'waiting' | 'done' | 'abandoned';
-export type TaskPriority = 'urgent_important' | 'important' | 'urgent' | 'low' | 'none';
+export type TaskPriority = 'urgent_important' | 'important' | 'urgent' | 'high' | 'medium' | 'low' | 'none';
 export type EnergyLevel = 'low' | 'medium' | 'high';
+
 export type TaskSource = 'manual' | 'voice' | 'ai' | 'share';
 
 export interface Reminder {
@@ -18,6 +19,21 @@ export interface RecurrenceRule {
   occurrences?: number;
 }
 
+export interface ChecklistItem {
+  id: string;
+  title: string;
+  isCompleted: boolean;
+  order: number;
+  estimatedMinutes?: number;
+  completedAt?: string;
+}
+
+export interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
 export interface Task {
   id: string;
   userId: string;
@@ -25,9 +41,10 @@ export interface Task {
   description?: string;
   notes?: string;
   parentTaskId?: string;
-  subtasks?: Task[];
+  subtasks?: Subtask[];
   order: number;
   status: TaskStatus;
+  completed: boolean;
   dueDate?: string;
   dueTime?: string;
   scheduledDate?: string;
@@ -36,18 +53,24 @@ export interface Task {
   actualMinutes?: number;
   priority: TaskPriority;
   energyRequired: EnergyLevel;
+  energyLevel?: EnergyLevel;
   tags: string[];
   projectId?: string;
+  listId?: string;
   context?: string;
   reminders: Reminder[];
   recurrence?: RecurrenceRule;
   links: string[];
+  startDate?: string;
+  startTime?: string;
+  snoozedUntil?: string;
   smallestFirstStep?: string;
   aiDecompositionUsed: boolean;
   source: TaskSource;
   createdAt: string;
   updatedAt: string;
-  completedAt?: string;
+  completedAt?: string | null;
+  checklist?: ChecklistItem[];
 }
 
 export interface CreateTaskInput {
@@ -57,15 +80,22 @@ export interface CreateTaskInput {
   dueTime?: string;
   scheduledDate?: string;
   scheduledTime?: string;
+  startDate?: string;
+  startTime?: string;
+  snoozedUntil?: string;
   estimatedMinutes?: number;
   priority?: TaskPriority;
   energyRequired?: EnergyLevel;
+  energyLevel?: EnergyLevel;
   tags?: string[];
   parentTaskId?: string;
   projectId?: string;
+  listId?: string;
   context?: string;
   smallestFirstStep?: string;
   source?: TaskSource;
+  checklist?: ChecklistItem[];
+  subtasks?: { title: string; completed: boolean }[];
 }
 
 export interface UpdateTaskInput extends Partial<CreateTaskInput> {

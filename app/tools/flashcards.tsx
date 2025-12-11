@@ -101,7 +101,7 @@ export default function FlashcardGeneratorScreen() {
       <StatusBar barStyle="light-content" />
       
       <LinearGradient
-        colors={gradients.focus as [string, string]}
+        colors={[...gradients.focus]}
         style={styles.headerGradient}
       >
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>

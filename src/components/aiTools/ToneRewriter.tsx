@@ -205,7 +205,7 @@ export const ToneRewriter: React.FC<ToneRewriterProps> = ({
           </View>
 
           {/* Changes */}
-          {result.changes.length > 0 && (
+          {result.changes && result.changes.length > 0 && (
             <View style={styles.changesSection}>
               <Text style={styles.changesTitle}>🔄 Key Changes Made</Text>
               {result.changes.map((change, index) => {

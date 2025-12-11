@@ -8,7 +8,7 @@ const router = Router();
 
 // Initialize Anthropic client
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
+  apiKey: process.env['ANTHROPIC_API_KEY'] || '',
 });
 
 // ADHD-focused system prompt for AI tools
@@ -20,6 +20,21 @@ Your responses should be:
 - ADHD-friendly (scannable, not overwhelming)
 
 Always provide structured JSON responses as specified in the prompts.`;
+
+const findTextContent = (message: { content: { type: string; text?: string }[] }) =>
+  message.content.find((block) => block.type === 'text' && block.text && block.text.trim().length > 0);
+
+const parseJsonFromText = <T>(text: string | undefined, fallback: T): T => {
+  if (!text) return fallback;
+  const match = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+  if (!match) return fallback;
+  try {
+    return JSON.parse(match[0]) as T;
+  } catch (error) {
+    console.warn('Failed to parse AI JSON response, using fallback:', error);
+    return fallback;
+  }
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SPOON/ENERGY ESTIMATOR (Goblin.tools Judge)
@@ -80,17 +95,23 @@ Provide a JSON response:
       messages: [{ role: 'user', content: prompt }],
     });
 
-    const textContent = message.content.find(block => block.type === 'text');
-    if (!textContent || textContent.type !== 'text') {
-      throw new Error('No text response from AI');
-    }
+    const fallbackResult = {
+      spoons: 3,
+      label: 'Moderate',
+      emoji: '🥄🥄🥄',
+      explanation: 'Unable to fully analyze - estimated as moderate difficulty',
+      factors: [
+        { name: 'Task Complexity', impact: 'medium', description: 'Standard task complexity' }
+      ],
+      suggestions: [
+        'Break the task into smaller steps',
+        'Set a timer to create urgency',
+        'Remove distractions before starting'
+      ],
+    };
 
-    const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Could not parse AI response');
-    }
-
-    const result = JSON.parse(jsonMatch[0]);
+    const textContent = findTextContent(message);
+    const result = parseJsonFromText(textContent?.text, fallbackResult);
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('Error estimating spoons:', error);
@@ -183,17 +204,16 @@ Make 2-4 notable changes to highlight.`;
       messages: [{ role: 'user', content: prompt }],
     });
 
-    const textContent = message.content.find(block => block.type === 'text');
-    if (!textContent || textContent.type !== 'text') {
-      throw new Error('No text response from AI');
-    }
+    const fallbackResult = {
+      original: text,
+      rewritten: text,
+      tone: targetTone,
+      changes: [],
+      readabilityScore: 60,
+    };
 
-    const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Could not parse AI response');
-    }
-
-    const result = JSON.parse(jsonMatch[0]);
+    const textContent = findTextContent(message);
+    const result = parseJsonFromText(textContent?.text, fallbackResult);
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('Error rewriting tone:', error);
@@ -231,17 +251,14 @@ Provide 2-3 suggestions.`;
       messages: [{ role: 'user', content: prompt }],
     });
 
-    const textContent = message.content.find(block => block.type === 'text');
-    if (!textContent || textContent.type !== 'text') {
-      throw new Error('No text response from AI');
-    }
+    const fallbackResult = {
+      detectedTone: 'friendly',
+      confidence: 0.5,
+      suggestions: [],
+    };
 
-    const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Could not parse AI response');
-    }
-
-    const result = JSON.parse(jsonMatch[0]);
+    const textContent = findTextContent(message);
+    const result = parseJsonFromText(textContent?.text, fallbackResult);
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('Error analyzing tone:', error);
@@ -280,7 +297,7 @@ router.post('/compile-notes', authMiddleware, validate(compileNotesSchema), asyn
       blog_post: 'Engaging blog post format with headers and sections',
     };
 
-    const numberedTexts = texts.map((t, i) => `[Note ${i + 1}]:\n${t}`).join('\n\n---\n\n');
+    const numberedTexts = texts.map((t: string, i: number) => `[Note ${i + 1}]:\n${t}`).join('\n\n---\n\n');
 
     const prompt = `Compile these scattered notes into a well-organized ${format}.
 
@@ -315,17 +332,18 @@ Provide a JSON response:
       messages: [{ role: 'user', content: prompt }],
     });
 
-    const textContent = message.content.find(block => block.type === 'text');
-    if (!textContent || textContent.type !== 'text') {
-      throw new Error('No text response from AI');
-    }
+    const fallbackResult = {
+      compiled: texts.join('\n\n'),
+      format,
+      title: title || 'Compiled Notes',
+      wordCount: texts.join(' ').split(/\s+/).length,
+      keyTopics: [],
+      actionItems: [],
+      questions: [],
+    };
 
-    const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Could not parse AI response');
-    }
-
-    const result = JSON.parse(jsonMatch[0]);
+    const textContent = findTextContent(message);
+    const result = parseJsonFromText(textContent?.text, fallbackResult);
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('Error compiling notes:', error);
@@ -367,7 +385,7 @@ ${subtasks?.length ? `Subtasks: ${subtasks.join(', ')}` : ''}
 ${complexity ? `Complexity: ${complexity}` : ''}
 ${familiarity ? `Familiarity: ${familiarity}` : ''}
 ${userHistory?.averageRatio ? `User typically takes ${Math.round(userHistory.averageRatio * 100)}% of estimated time` : ''}
-${userHistory?.similarTasks?.length ? `Similar past tasks: ${userHistory.similarTasks.map(t => `${t.title}: estimated ${t.estimated}min, actual ${t.actual}min`).join('; ')}` : ''}
+${userHistory?.similarTasks?.length ? `Similar past tasks: ${userHistory.similarTasks.map((t: { title: string; estimated: number; actual: number }) => `${t.title}: estimated ${t.estimated}min, actual ${t.actual}min`).join('; ')}` : ''}
 
 Provide a JSON response:
 {
@@ -397,17 +415,25 @@ Account for ADHD-typical challenges: task switching, hyperfocus potential, decis
       messages: [{ role: 'user', content: prompt }],
     });
 
-    const textContent = message.content.find(block => block.type === 'text');
-    if (!textContent || textContent.type !== 'text') {
-      throw new Error('No text response from AI');
-    }
+    const fallbackResult = {
+      estimatedMinutes: 30,
+      confidence: 'low',
+      minMinutes: 20,
+      maxMinutes: 60,
+      breakdown: [
+        { phase: 'Setup', minutes: 5, description: 'Getting started and gathering materials' },
+        { phase: 'Main Work', minutes: 20, description: 'Core task execution' },
+        { phase: 'Review', minutes: 5, description: 'Checking work and wrapping up' },
+      ],
+      tips: [
+        'Set a timer to create time awareness',
+        'Break into 15-minute chunks with short breaks',
+        'Remove phone and other distractions',
+      ],
+    };
 
-    const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Could not parse AI response');
-    }
-
-    const result = JSON.parse(jsonMatch[0]);
+    const textContent = findTextContent(message);
+    const result = parseJsonFromText(textContent?.text, fallbackResult);
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('Error estimating time:', error);
@@ -453,7 +479,7 @@ router.post('/magic-breakdown', authMiddleware, validate(magicBreakdownSchema), 
   try {
     const { task, context, granularity = 'medium', currentEnergy, maxSteps = 7 } = req.body;
 
-    const granularityGuide = {
+    const granularityGuide: Record<string, string> = {
       coarse: '3-4 high-level steps, 15-30 min each',
       medium: '5-7 manageable steps, 10-20 min each',
       fine: '7-10 detailed steps, 5-15 min each',
@@ -465,7 +491,7 @@ router.post('/magic-breakdown', authMiddleware, validate(magicBreakdownSchema), 
 Task: "${task}"
 ${context ? `Context: ${context}` : ''}
 ${currentEnergy ? `Current energy: ${currentEnergy}/5 spoons` : ''}
-Granularity: ${granularity} (${granularityGuide[granularity]})
+Granularity: ${granularity} (${granularityGuide[granularity] || granularityGuide['medium']})
 Max steps: ${maxSteps}
 
 Provide a JSON response:
@@ -506,17 +532,20 @@ ADHD-friendly principles:
       messages: [{ role: 'user', content: prompt }],
     });
 
-    const textContent = message.content.find(block => block.type === 'text');
-    if (!textContent || textContent.type !== 'text') {
-      throw new Error('No text response from AI');
-    }
+    const fallbackResult = {
+      originalTask: task,
+      steps: [
+        { id: 'step_1', title: `Start: ${task.substring(0, 30)}`, order: 1, estimatedMinutes: 10, spoons: 2, emoji: '🪄' },
+      ],
+      totalEstimatedMinutes: 10,
+      totalSpoons: 2,
+      smallestFirstStep: `Write down the first action for "${task.substring(0, 30)}"`,
+      encouragement: 'You can do this—start small and keep moving!',
+      progressCheckpoints: [],
+    };
 
-    const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Could not parse AI response');
-    }
-
-    const result = JSON.parse(jsonMatch[0]);
+    const textContent = findTextContent(message);
+    const result = parseJsonFromText(textContent?.text, fallbackResult);
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('Error in magic breakdown:', error);

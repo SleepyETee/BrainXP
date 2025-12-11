@@ -30,14 +30,27 @@ model User {
 
   // Relations
   tasks             Task[]
+  timelineBlocks    TimelineBlock[]
   habits            Habit[]
   routines          Routine[]
   focusSessions     FocusSession[]
+  nudgePreference   NudgePreference?
   moodEntries       MoodEntry[]
   captureItems      CaptureItem[]
   progress          UserProgress?
   badges            UserBadge[]
   xpEvents          XPEvent[]
+  passiveTrackingEvents PassiveTrackingEvent[]
+  attentionReports  AttentionReport[]
+  trackingBlocklist TrackingBlocklist[]
+  mindMapNodes      MindMapNode[]
+  mindMapEdges      MindMapEdge[]
+  lessonReflections LessonReflection[]
+  lessonThreads     LessonThread[]
+  lessonComments    LessonComment[]
+  userCosmetics     UserCosmetic[]
+  partyMembers      PartyMember[]
+  streakArmor       StreakArmor?
   
   // Non-drug treatment relations
   cbtInterventions       CBTIntervention[]
@@ -59,6 +72,9 @@ model User {
   dailyLists             DailyList[]
   things                 Thing[]
   aiToolUsage            AIToolUsage[]
+  taskLists              TaskList[]
+  smartLists             SmartList[]
+  widgetPresets          WidgetPreset[]
 
   @@map("users")
 }
@@ -92,6 +108,7 @@ model Task {
 
   tags              String[]
   projectId         String?
+  listId            String?
   context           String?
 
   recurrence        Json?
@@ -103,13 +120,21 @@ model Task {
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
   completedAt       DateTime?
+  startDate         DateTime?
+  startTime         String?
+  snoozedUntil      DateTime?
 
   reminders         Reminder[]
   focusSessions     FocusSession[]
+  timelineBlocks    TimelineBlock[]
+  checklistItems    TaskChecklistItem[]
+  mindMapNodes      MindMapNode[]
+  list              TaskList?   @relation(fields: [listId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([status])
   @@index([dueDate])
+  @@index([listId])
   @@map("tasks")
 }
 
@@ -120,9 +145,82 @@ model Reminder {
   time      DateTime
   type      String   @default("notification") // notification, alarm
   sent      Boolean  @default(false)
+  locationName String?
+  locationLat  Float?
+  locationLng  Float?
+  snoozeUntil  DateTime?
 
   @@index([taskId])
   @@map("reminders")
+}
+
+model TaskChecklistItem {
+  id          String   @id @default(uuid())
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  title       String
+  isCompleted Boolean  @default(false)
+  order       Int      @default(0)
+  estimatedMinutes Int?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([taskId])
+  @@map("task_checklist_items")
+}
+
+model TaskList {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  color     String?
+  icon      String?
+  order     Int      @default(0)
+  isPinned  Boolean  @default(false)
+  isDefault Boolean  @default(false)
+  tasks     Task[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("task_lists")
+}
+
+model SmartList {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  slug      String
+  icon      String?
+  color     String?
+  preset    Boolean  @default(false)
+  pinned    Boolean  @default(false)
+  filters   Json
+  sort      Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, slug])
+  @@index([userId, pinned])
+  @@map("smart_lists")
+}
+
+model WidgetPreset {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // quick_add, pinned_list, today_summary, habit_widget, focus_widget
+  title     String?
+  config    Json?
+  order     Int      @default(0)
+  isPinned  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, type])
+  @@map("widget_presets")
 }
 
 model Habit {
@@ -243,16 +341,25 @@ model FocusSession {
 
   taskId          String?
   task            Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  timelineBlockId String?
+  timelineBlock   TimelineBlock? @relation(fields: [timelineBlockId], references: [id], onDelete: SetNull)
   taskDescription String
 
   plannedDuration Int       // in minutes
   actualDuration  Int?      // in minutes
+  breakDuration   Int?      // in minutes
+  longBreakDuration Int?    // in minutes
+  sessionType     String    @default("pomodoro") // pomodoro, deep_work, sprint
+  autoContinue    Boolean   @default(false)
+  status          String    @default("active") // active, completed, cancelled, interrupted, extended
+  outcome         String?
 
   startTime       DateTime  @default(now())
   endTime         DateTime?
 
   interruptions   Json?     // Array of interruption objects
   backgroundSound String?
+  ambientVolume   Int?      // 0-100
 
   qualityRating   Int?      // 1-5
   completedTask   Boolean   @default(false)
@@ -260,7 +367,54 @@ model FocusSession {
 
   @@index([userId])
   @@index([startTime])
+  @@index([timelineBlockId])
   @@map("focus_sessions")
+}
+
+model TimelineBlock {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  taskId      String?
+  task        Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  title       String
+  type        String   @default("task") // task, focus, break, buffer, routine, event
+  startTime   DateTime
+  endTime     DateTime
+  day         DateTime @db.Date
+  color       String?
+  isBuffer    Boolean  @default(false)
+  order       Int      @default(0)
+  notes       String?
+
+  focusSessions FocusSession[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, day])
+  @@index([userId, startTime])
+  @@index([taskId])
+  @@map("timeline_blocks")
+}
+
+model NudgePreference {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  enabled              Boolean  @default(true)
+  preTransitionMinutes Int      @default(5)
+  driftDetectionMinutes Int     @default(2)
+  soundsEnabled        Boolean  @default(true)
+  hapticsEnabled       Boolean  @default(true)
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("nudge_preferences")
 }
 
 model CaptureItem {
@@ -286,6 +440,7 @@ model CaptureItem {
 
   capturedAt      DateTime  @default(now())
   source          String    @default("app") // app, widget, share, notification
+  metadata        CaptureMetadata?
 
   @@index([userId])
   @@index([status])
@@ -821,6 +976,9 @@ model Note {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   archivedAt  DateTime?
+
+  // Relations
+  mindMapNodes  MindMapNode[]
   
   @@index([userId])
   @@index([folderId])
@@ -1004,4 +1162,277 @@ model AIToolUsage {
   @@index([userId])
   @@index([tool])
   @@map("ai_tool_usage")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PASSIVE TRACKING & ATTENTION REPORTS (RescueTime-inspired)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model PassiveTrackingEvent {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  source      String   // desktop, mobile, extension
+  appName     String?
+  appId       String?
+  website     String?
+  category    String?  // work, social, entertainment, comms
+  durationSec Int      @default(0)
+  isActiveWindow Boolean @default(true)
+  blocked     Boolean  @default(false)
+  collectedAt DateTime @default(now())
+  metadata    Json?
+
+  @@index([userId, collectedAt])
+  @@map("passive_tracking_events")
+}
+
+model AttentionReport {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date          DateTime @db.Date
+  focusScore    Int      // 0-100
+  topDistractors Json    // [{name, durationSec}]
+  attentionLeaks Json?   // [{start,end,app,website}]
+  suggestedBlocks Json?  // suggested timeline block adjustments
+
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, date])
+  @@map("attention_reports")
+}
+
+model TrackingBlocklist {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pattern   String
+  type      String   @default("website") // website, app
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("tracking_blocklist")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CAPTURE METADATA (Voicy-inspired)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model CaptureMetadata {
+  id          String   @id @default(uuid())
+  captureId   String   @unique
+  capture     CaptureItem @relation(fields: [captureId], references: [id], onDelete: Cascade)
+
+  engine      String?  // on_device, whisper, platform
+  language    String?  // ISO code
+  quality     String?  // high, medium, low
+  diarization Json?    // speaker segments
+  cleanupMode String?  // verbatim, concise, action-items
+  discountApplied Boolean @default(false)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("capture_metadata")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MIND MAP (SimpleMind-inspired)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model MindMapNode {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title     String
+  content   String?
+  color     String?
+  icon      String?
+  position  Json     // { x, y, scale }
+
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  noteId    String?
+  note      Note?    @relation(fields: [noteId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  outgoingEdges MindMapEdge[] @relation("OutgoingEdges")
+  incomingEdges MindMapEdge[] @relation("IncomingEdges")
+
+  @@index([userId])
+  @@map("mind_map_nodes")
+}
+
+model MindMapEdge {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  sourceId    String
+  targetId    String
+  source      MindMapNode @relation("OutgoingEdges", fields: [sourceId], references: [id], onDelete: Cascade)
+  target      MindMapNode @relation("IncomingEdges", fields: [targetId], references: [id], onDelete: Cascade)
+
+  label       String?
+  style       Json?
+
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([sourceId])
+  @@index([targetId])
+  @@map("mind_map_edges")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LESSONS & COMMUNITY (Inflow-inspired)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model Lesson {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  title       String
+  summary     String
+  content     String   // Markdown/HTML
+  durationMin Int      @default(10)
+  tags        String[]
+  published   Boolean  @default(true)
+
+  reflections LessonReflection[]
+  threads     LessonThread[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("lessons")
+}
+
+model LessonReflection {
+  id          String   @id @default(uuid())
+  lessonId    String
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  response    String
+  moodLevel   Int?     // 1-5
+  submittedAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([lessonId])
+  @@map("lesson_reflections")
+}
+
+model LessonThread {
+  id          String   @id @default(uuid())
+  lessonId    String
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  createdAt   DateTime @default(now())
+
+  comments    LessonComment[]
+
+  @@index([lessonId])
+  @@index([userId])
+  @@map("lesson_threads")
+}
+
+model LessonComment {
+  id          String   @id @default(uuid())
+  threadId    String
+  thread      LessonThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  content     String
+  moodSignal  Int?     // 1-5, optional quick mood check
+  createdAt   DateTime @default(now())
+
+  @@index([threadId])
+  @@index([userId])
+  @@map("lesson_comments")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GAMIFICATION (Habitica-inspired)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model CosmeticItem {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String
+  description String?
+  rarity      String   @default("common") // common, rare, epic, legendary
+  icon        String?
+  costXp      Int      @default(0)
+  category    String   @default("cosmetic") // cosmetic, armor, badge
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  owners      UserCosmetic[]
+
+  @@map("cosmetic_items")
+}
+
+model UserCosmetic {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cosmeticId  String
+  cosmetic    CosmeticItem @relation(fields: [cosmeticId], references: [id], onDelete: Cascade)
+
+  equipped    Boolean  @default(false)
+  earnedFrom  String?
+  acquiredAt  DateTime @default(now())
+
+  @@unique([userId, cosmeticId])
+  @@map("user_cosmetics")
+}
+
+model Party {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  inviteCode  String   @unique
+
+  members     PartyMember[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("parties")
+}
+
+model PartyMember {
+  id          String   @id @default(uuid())
+  partyId     String
+  party       Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        String   @default("member") // member, admin
+
+  joinedAt    DateTime @default(now())
+
+  @@unique([partyId, userId])
+  @@map("party_members")
+}
+
+model StreakArmor {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  level       Int      @default(1)
+  durability  Int      @default(100)
+  lastUpdated DateTime @default(now())
+
+  @@map("streak_armor")
 }

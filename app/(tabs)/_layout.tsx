@@ -36,23 +36,14 @@ function TabIcon({ name, focused, color }: TabIconProps) {
 }
 
 export default function TabLayout() {
-  const { theme, isDark } = useTheme();
-
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: [
-          styles.tabBar,
-          {
-            backgroundColor: isDark ? theme.surface : '#FFFFFF',
-            borderTopColor: theme.border,
-          },
-        ],
-        tabBarShowLabel: true,
-        tabBarLabelStyle: styles.tabLabel,
-        tabBarActiveTintColor: theme.primary[500],
-        tabBarInactiveTintColor: theme.gray[400],
+        tabBarStyle: styles.tabBar,
+        tabBarShowLabel: false,
+        tabBarActiveTintColor: colors.primary[500],
+        tabBarInactiveTintColor: colors.gray[400],
       }}
     >
       <Tabs.Screen

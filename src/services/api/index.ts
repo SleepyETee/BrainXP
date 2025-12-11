@@ -8,3 +8,4 @@ export * as aiApi from './ai';
 export * as analyticsApi from './analytics';
 export * as aiToolsApi from './aiTools';
 export * as studyApi from './study';
+export * as timelineApi from './timeline';

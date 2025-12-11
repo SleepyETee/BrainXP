@@ -263,11 +263,28 @@ export interface ToneAnalysis {
 
 // Time Estimation types
 export interface TimeEstimate {
-  totalMinutes: number;
-  breakdown?: { task: string; minutes: number }[];
+  estimatedMinutes: number;
+  confidence: 'low' | 'medium' | 'high';
+  minMinutes: number;
+  maxMinutes: number;
+  personalizedMinutes?: number;
+  personalRatio?: number;
+  breakdown?: { phase: string; minutes: number; description: string }[];
+  tips?: string[];
 }
 
 export interface EstimateTimeInput {
-  task: string;
-  context?: string;
+  taskTitle: string;
+  taskDescription?: string;
+  subtasks?: string[];
+  userHistory?: {
+    averageRatio?: number;
+    similarTasks?: {
+      title: string;
+      estimated: number;
+      actual: number;
+    }[];
+  };
+  complexity?: 'simple' | 'moderate' | 'complex';
+  familiarity?: 'new' | 'familiar' | 'expert';
 }

@@ -9,6 +9,7 @@ import {
   CaptureProcessResult,
   CaptureStatus,
 } from '../types/capture';
+import { useAuthStore } from './authStore';
 
 interface CaptureState {
   items: CaptureItem[];
@@ -31,6 +32,7 @@ interface CaptureState {
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
+const getUserId = () => useAuthStore.getState().user?.id || 'local-user';
 
 export const useCaptureStore = create<CaptureState>()(
   persist(
@@ -45,7 +47,7 @@ export const useCaptureStore = create<CaptureState>()(
         try {
           const item: CaptureItem = {
             id: generateId(),
-            userId: '1', // TODO: Get from auth store
+            userId: getUserId(),
             contentType: 'text',
             textContent: input.textContent,
             status: 'pending',
@@ -70,7 +72,7 @@ export const useCaptureStore = create<CaptureState>()(
         try {
           const item: CaptureItem = {
             id: generateId(),
-            userId: '1', // TODO: Get from auth store
+            userId: getUserId(),
             contentType: 'voice',
             voiceUrl: input.voiceUrl,
             voiceDuration: input.voiceDuration,

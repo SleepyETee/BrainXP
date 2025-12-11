@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export interface AppSettings {
   // Appearance
   theme: 'light' | 'dark' | 'auto';
+  paletteMode: 'minimal' | 'game' | 'study';
   accentColor: string;
   compactMode: boolean;
 
@@ -45,10 +46,12 @@ export interface AppSettings {
   celebrationsEnabled: boolean;
   showXPPopups: boolean;
   showLevelBadge: boolean;
+  showXPAnimations: boolean;
 
   // Privacy & Data
   analyticsEnabled: boolean;
   crashReportsEnabled: boolean;
+  upshiftSyncEnabled: boolean;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ACCESSIBILITY - Neurodivergent-Friendly Options
@@ -93,11 +96,13 @@ interface SettingsState {
   updateSettings: (updates: Partial<AppSettings>) => void;
   resetSettings: () => void;
   toggleTheme: () => void;
+  setPaletteMode: (mode: AppSettings['paletteMode']) => void;
 }
 
 const defaultSettings: AppSettings = {
   // Appearance
   theme: 'auto',
+  paletteMode: 'minimal',
   accentColor: '#3B82F6',
   compactMode: false,
 
@@ -138,10 +143,12 @@ const defaultSettings: AppSettings = {
   celebrationsEnabled: true,
   showXPPopups: true,
   showLevelBadge: true,
+  showXPAnimations: true,
 
   // Privacy & Data
   analyticsEnabled: true,
   crashReportsEnabled: true,
+  upshiftSyncEnabled: false,
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ACCESSIBILITY DEFAULTS - Sensible for neurodivergent users
@@ -205,6 +212,12 @@ export const useSettingsStore = create<SettingsState>()(
 
         set((state) => ({
           settings: { ...state.settings, theme: nextTheme },
+        }));
+      },
+
+      setPaletteMode: (mode) => {
+        set((state) => ({
+          settings: { ...state.settings, paletteMode: mode },
         }));
       },
     }),

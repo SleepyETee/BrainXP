@@ -8,7 +8,7 @@ const router = Router();
 
 // Initialize Anthropic client
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
+  apiKey: process.env['ANTHROPIC_API_KEY'] || '',
 });
 
 // Study-focused system prompt
@@ -302,7 +302,7 @@ router.post('/generate/flashcards', authMiddleware, validate(generateFlashcardsS
   try {
     const { content, count = 10, difficulty = 'medium', focusAreas, studySetTitle } = req.body;
 
-    const difficultyGuide = {
+    const difficultyGuide: Record<string, string> = {
       easy: 'basic definitions, simple facts, straightforward Q&A',
       medium: 'conceptual understanding, relationships between ideas, application',
       hard: 'analysis, synthesis, edge cases, nuanced understanding',
@@ -315,7 +315,7 @@ Content:
 ${content.substring(0, 10000)}
 """
 
-Difficulty: ${difficulty} (${difficultyGuide[difficulty]})
+Difficulty: ${difficulty} (${difficultyGuide[difficulty] || difficultyGuide['medium']})
 ${focusAreas?.length ? `Focus on: ${focusAreas.join(', ')}` : ''}
 
 Create flashcards optimized for spaced repetition learning. Mix question types:

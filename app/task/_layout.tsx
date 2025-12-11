@@ -1,0 +1,13 @@
+// filepath: /Users/sleepyet/BrainXP/app/task/_layout.tsx
+import { Stack } from 'expo-router';
+
+export default function TaskLayout() {
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        animation: 'slide_from_right',
+      }}
+    />
+  );
+}

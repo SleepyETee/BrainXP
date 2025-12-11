@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuthStore } from './authStore';
 import {
   CBTIntervention,
   ThoughtLogEntry,
@@ -156,6 +157,7 @@ interface TherapyState extends
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
+const getUserId = () => useAuthStore.getState().user?.id || 'local-user';
 
 export const useTherapyStore = create<TherapyState>()(
   persist(
@@ -171,7 +173,7 @@ export const useTherapyStore = create<TherapyState>()(
         const intervention: CBTIntervention = {
           id: generateId(),
           taskId,
-          userId: '1', // TODO: Get from auth store
+          userId: getUserId(),
           triggeredAt: new Date().toISOString(),
           triggerType,
           negativeThoughts: [],
@@ -364,7 +366,7 @@ export const useTherapyStore = create<TherapyState>()(
         const plan: FocusSessionPlan = {
           id: generateId(),
           sessionId,
-          userId: '1',
+          userId: getUserId(),
           steps: steps.slice(0, maxSteps).map((text) => ({
             id: generateId(),
             text,
@@ -517,7 +519,7 @@ export const useTherapyStore = create<TherapyState>()(
       startSession: (type, trigger, contextTaskId, contextFocusSessionId) => {
         const session: MindfulnessSession = {
           id: generateId(),
-          userId: '1',
+          userId: getUserId(),
           type,
           trigger,
           contextTaskId,
@@ -651,7 +653,7 @@ export const useTherapyStore = create<TherapyState>()(
       triggerEducation: (cardId, trigger, context) => {
         const triggered: TriggeredEducation = {
           id: generateId(),
-          userId: '1',
+          userId: getUserId(),
           cardId,
           trigger,
           triggerContext: context,

@@ -34,6 +34,32 @@ export interface TaskEstimateAdjustment {
   reasoning: string;
 }
 
+export interface ProjectCandidate {
+  id: string;
+  name: string;
+  description?: string;
+  tags?: string[];
+  status?: 'active' | 'backlog' | 'on_hold' | 'completed';
+}
+
+export interface ProjectMatchResult {
+  recommendedProject: {
+    id: string;
+    name: string;
+    confidence: number;
+    reason: string;
+    suggestedTags?: string[];
+  };
+  alternatives: {
+    id: string;
+    name: string;
+    reason: string;
+    score?: number;
+  }[];
+  shouldCreateNewProject: boolean;
+  newProjectIdea?: string | null;
+}
+
 export interface DecomposeTaskRequest {
   title: string;
   description?: string;
@@ -83,6 +109,12 @@ export interface EncouragementResponse {
 export interface AICoachMessage {
   response: string;
   suggestions: string[];
+}
+
+export interface ProjectMatchRequest {
+  taskTitle: string;
+  taskDescription?: string;
+  projects: ProjectCandidate[];
 }
 
 // Task decomposition with Claude AI
@@ -212,6 +244,17 @@ export const chatWithCoach = async (
   const response = await apiClient.post<ApiResponse<AICoachMessage>>(
     '/ai/chat',
     { message, conversationHistory }
+  );
+  return response.data.data;
+};
+
+// Match a task to the best project
+export const matchProject = async (
+  request: ProjectMatchRequest
+): Promise<ProjectMatchResult> => {
+  const response = await apiClient.post<ApiResponse<ProjectMatchResult>>(
+    '/ai/project-match',
+    request
   );
   return response.data.data;
 };

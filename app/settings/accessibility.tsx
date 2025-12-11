@@ -9,9 +9,11 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors, shadows } from '../../src/theme/colors';
+import { useTheme } from '../../src/theme';
 import { useSettingsStore } from '../../src/stores/settingsStore';
 import * as Haptics from 'expo-haptics';
 
@@ -23,6 +25,7 @@ const SettingSwitch: React.FC<{
   onValueChange: (value: boolean) => void;
   icon?: string;
 }> = ({ label, description, value, onValueChange, icon }) => {
+  const theme = useTheme();
   const reduceMotion = useSettingsStore((state) => state.settings.reduceMotion);
 
   const handleChange = async (newValue: boolean) => {
@@ -33,13 +36,13 @@ const SettingSwitch: React.FC<{
   };
 
   return (
-    <View style={styles.settingItem}>
+    <View style={[styles.settingItem, { borderBottomColor: theme.border }]}>
       <View style={styles.settingContent}>
         {icon && <Text style={styles.settingIcon}>{icon}</Text>}
         <View style={styles.settingTextContainer}>
-          <Text style={styles.settingLabel}>{label}</Text>
+          <Text style={[styles.settingLabel, { color: theme.text.primary }]}>{label}</Text>
           {description && (
-            <Text style={styles.settingDescription}>{description}</Text>
+            <Text style={[styles.settingDescription, { color: theme.text.secondary }]}>{description}</Text>
           )}
         </View>
       </View>
@@ -47,11 +50,11 @@ const SettingSwitch: React.FC<{
         value={value}
         onValueChange={handleChange}
         trackColor={{
-          false: colors.gray[200],
+          false: theme.palette.gray[300],
           true: colors.primary[400],
         }}
-        thumbColor={value ? colors.primary[600] : colors.gray[50]}
-        ios_backgroundColor={colors.gray[200]}
+        thumbColor={value ? colors.primary[600] : theme.background.card}
+        ios_backgroundColor={theme.palette.gray[300]}
         accessibilityLabel={label}
         accessibilityHint={description}
       />
@@ -63,12 +66,15 @@ const SettingSwitch: React.FC<{
 const SectionHeader: React.FC<{ title: string; emoji: string }> = ({
   title,
   emoji,
-}) => (
-  <View style={styles.sectionHeader}>
-    <Text style={styles.sectionEmoji}>{emoji}</Text>
-    <Text style={styles.sectionTitle}>{title}</Text>
-  </View>
-);
+}) => {
+  const theme = useTheme();
+  return (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionEmoji}>{emoji}</Text>
+      <Text style={[styles.sectionTitle, { color: theme.text.primary }]}>{title}</Text>
+    </View>
+  );
+};
 
 // Selection option component
 const SettingOption: React.FC<{
@@ -78,14 +84,15 @@ const SettingOption: React.FC<{
   label: string;
   description?: string;
 }> = ({ options, selected, onSelect, label, description }) => {
+  const theme = useTheme();
   const reduceMotion = useSettingsStore((state) => state.settings.reduceMotion);
 
   return (
-    <View style={styles.settingItem}>
+    <View style={[styles.settingItem, { borderBottomColor: theme.border }]}>
       <View style={styles.settingTextContainer}>
-        <Text style={styles.settingLabel}>{label}</Text>
+        <Text style={[styles.settingLabel, { color: theme.text.primary }]}>{label}</Text>
         {description && (
-          <Text style={styles.settingDescription}>{description}</Text>
+          <Text style={[styles.settingDescription, { color: theme.text.secondary }]}>{description}</Text>
         )}
       </View>
       <View style={styles.optionRow}>
@@ -94,7 +101,8 @@ const SettingOption: React.FC<{
             key={option.value}
             style={[
               styles.optionButton,
-              selected === option.value && styles.optionButtonActive,
+              { backgroundColor: theme.palette.gray[200] },
+              selected === option.value && { backgroundColor: colors.primary[500] },
             ]}
             onPress={async () => {
               if (!reduceMotion) {
@@ -108,7 +116,8 @@ const SettingOption: React.FC<{
             <Text
               style={[
                 styles.optionText,
-                selected === option.value && styles.optionTextActive,
+                { color: theme.text.secondary },
+                selected === option.value && { color: '#FFFFFF' },
               ]}
             >
               {option.label}
@@ -122,27 +131,62 @@ const SettingOption: React.FC<{
 
 export default function AccessibilitySettingsScreen() {
   const router = useRouter();
+  const theme = useTheme();
   const settings = useSettingsStore((state) => state.settings);
   const updateSettings = useSettingsStore((state) => state.updateSettings);
 
+  const handleReset = () => {
+    Alert.alert(
+      'Reset Accessibility Settings',
+      'This will reset all accessibility settings to their defaults. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: () => {
+            updateSettings({
+              reduceMotion: false,
+              animationSpeed: 'normal',
+              largeText: false,
+              highContrast: false,
+              dimBrightColors: false,
+              dyslexiaFont: false,
+              lineSpacing: 'normal',
+              letterSpacing: 'normal',
+              focusModeEnabled: false,
+              hideNonEssential: false,
+              simplifyNavigation: false,
+              showTaskCounts: true,
+              hapticFeedback: true,
+              quietMode: false,
+              disableAutoplay: true,
+              gentleReminders: true,
+            });
+          },
+        },
+      ]
+    );
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background.primary }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.background.card, borderBottomColor: theme.border }]}>
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backButton}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Text style={styles.backButtonText}>←</Text>
+          <Text style={[styles.backButtonText, { color: theme.text.primary }]}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Accessibility</Text>
+        <Text style={[styles.headerTitle, { color: theme.text.primary }]}>Accessibility</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       {/* Intro */}
-      <View style={styles.intro}>
-        <Text style={styles.introText}>
+      <View style={[styles.intro, { backgroundColor: colors.primary[50], borderBottomColor: colors.primary[100] }]}>
+        <Text style={[styles.introText, { color: colors.primary[800] }]}>
           Customize your experience to match how your brain works best. These settings help reduce overwhelm and improve focus.
         </Text>
       </View>
@@ -154,7 +198,7 @@ export default function AccessibilitySettingsScreen() {
       >
         {/* Motion & Animation */}
         <SectionHeader title="Motion & Animation" emoji="✨" />
-        <View style={styles.section}>
+        <View style={[styles.section, { backgroundColor: theme.background.card }]}>
           <SettingSwitch
             label="Reduce Motion"
             description="Minimize animations throughout the app"
@@ -181,7 +225,7 @@ export default function AccessibilitySettingsScreen() {
 
         {/* Visual */}
         <SectionHeader title="Visual" emoji="👁️" />
-        <View style={styles.section}>
+        <View style={[styles.section, { backgroundColor: theme.background.card }]}>
           <SettingSwitch
             label="Large Text"
             description="Increase base font size for easier reading"
@@ -207,7 +251,7 @@ export default function AccessibilitySettingsScreen() {
 
         {/* Reading & Focus */}
         <SectionHeader title="Reading & Focus" emoji="📖" />
-        <View style={styles.section}>
+        <View style={[styles.section, { backgroundColor: theme.background.card }]}>
           <SettingSwitch
             label="Dyslexia-Friendly Font"
             description="Use a font designed for easier reading"
@@ -250,7 +294,7 @@ export default function AccessibilitySettingsScreen() {
 
         {/* Cognitive Load */}
         <SectionHeader title="Cognitive Load" emoji="🧠" />
-        <View style={styles.section}>
+        <View style={[styles.section, { backgroundColor: theme.background.card }]}>
           <SettingSwitch
             label="Focus Mode"
             description="Minimal UI with reduced distractions"
@@ -291,7 +335,7 @@ export default function AccessibilitySettingsScreen() {
 
         {/* Sensory */}
         <SectionHeader title="Sensory" emoji="👂" />
-        <View style={styles.section}>
+        <View style={[styles.section, { backgroundColor: theme.background.card }]}>
           <SettingSwitch
             label="Haptic Feedback"
             description="Vibrations for interactions"
@@ -321,7 +365,7 @@ export default function AccessibilitySettingsScreen() {
 
         {/* Reminders */}
         <SectionHeader title="Reminders" emoji="⏰" />
-        <View style={styles.section}>
+        <View style={[styles.section, { backgroundColor: theme.background.card }]}>
           <SettingSwitch
             label="Gentle Reminders"
             description="Use softer, less urgent notification style"
@@ -336,13 +380,10 @@ export default function AccessibilitySettingsScreen() {
         {/* Reset */}
         <View style={styles.resetSection}>
           <TouchableOpacity
-            style={styles.resetButton}
-            onPress={() => {
-              // Would reset to defaults
-              console.log('Reset accessibility settings');
-            }}
+            style={[styles.resetButton, { borderColor: theme.border }]}
+            onPress={handleReset}
           >
-            <Text style={styles.resetButtonText}>Reset to Defaults</Text>
+            <Text style={[styles.resetButtonText, { color: theme.text.secondary }]}>Reset to Defaults</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -353,16 +394,13 @@ export default function AccessibilitySettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.gray[50],
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: colors.gray[200],
   },
   backButton: {
     width: 40,
@@ -372,13 +410,11 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 24,
-    color: colors.gray[600],
   },
   headerTitle: {
     flex: 1,
     fontSize: 18,
     fontWeight: '700',
-    color: colors.gray[900],
     textAlign: 'center',
   },
   headerSpacer: {
@@ -388,13 +424,10 @@ const styles = StyleSheet.create({
   // Intro
   intro: {
     padding: 16,
-    backgroundColor: colors.primary[50],
     borderBottomWidth: 1,
-    borderBottomColor: colors.primary[100],
   },
   introText: {
     fontSize: 14,
-    color: colors.primary[800],
     lineHeight: 21,
   },
 
@@ -420,12 +453,11 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.gray[900],
   },
   section: {
-    backgroundColor: '#FFFFFF',
     marginHorizontal: 16,
     borderRadius: 12,
+    overflow: 'hidden',
     ...shadows.sm,
   },
 
@@ -437,7 +469,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.gray[100],
     minHeight: 60,
   },
   settingContent: {
@@ -456,12 +487,10 @@ const styles = StyleSheet.create({
   settingLabel: {
     fontSize: 15,
     fontWeight: '600',
-    color: colors.gray[800],
     lineHeight: 20,
   },
   settingDescription: {
     fontSize: 13,
-    color: colors.gray[500],
     marginTop: 2,
     lineHeight: 17,
   },
@@ -477,18 +506,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: colors.gray[100],
-  },
-  optionButtonActive: {
-    backgroundColor: colors.primary[500],
   },
   optionText: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.gray[600],
-  },
-  optionTextActive: {
-    color: '#FFFFFF',
   },
 
   // Reset
@@ -499,10 +520,11 @@ const styles = StyleSheet.create({
   resetButton: {
     paddingVertical: 12,
     paddingHorizontal: 24,
+    borderRadius: 8,
+    borderWidth: 1,
   },
   resetButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.gray[500],
   },
 });

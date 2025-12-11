@@ -106,7 +106,7 @@ export default function HabitDetailScreen() {
         rightAction={{
           icon: '⚙️',
           onPress: () => {
-            // TODO: Navigate to edit screen
+            router.push(`/habit/create?habitId=${habit.id}`);
           },
         }}
       />

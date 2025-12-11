@@ -11,6 +11,8 @@ import {
   FlexibleStreak,
   HabitStats,
 } from '../types/habit';
+import { useAuthStore } from './authStore';
+import { syncHabit, syncHabitLog } from '../services/upshift';
 
 interface HabitState {
   habits: Habit[];
@@ -37,6 +39,7 @@ interface HabitState {
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
+const getUserId = () => useAuthStore.getState().user?.id || 'local-user';
 
 export const useHabitStore = create<HabitState>()(
   persist(
@@ -61,7 +64,7 @@ export const useHabitStore = create<HabitState>()(
         try {
           const habit: Habit = {
             id: generateId(),
-            userId: '1', // TODO: Get from auth store
+            userId: getUserId(),
             name: input.name,
             icon: input.icon,
             color: input.color,
@@ -81,6 +84,8 @@ export const useHabitStore = create<HabitState>()(
             isLoading: false,
           }));
 
+          void syncHabit(habit);
+
           return habit;
         } catch (error) {
           set({ error: (error as Error).message, isLoading: false });
@@ -90,17 +95,22 @@ export const useHabitStore = create<HabitState>()(
 
       updateHabit: async (id, updates) => {
         try {
+          let updated: Habit | undefined;
           set((state) => ({
-            habits: state.habits.map((h) =>
-              h.id === id 
-                ? { 
-                    ...h, 
-                    ...updates,
-                    archivedAt: updates.archivedAt === null ? undefined : updates.archivedAt ?? h.archivedAt,
-                  } 
-                : h
-            ),
+            habits: state.habits.map((h) => {
+              if (h.id === id) {
+                updated = {
+                  ...h,
+                  ...updates,
+                  archivedAt: updates.archivedAt === null ? undefined : updates.archivedAt ?? h.archivedAt,
+                };
+                return updated;
+              }
+              return h;
+            }),
           }));
+
+          if (updated) void syncHabit(updated);
         } catch (error) {
           set({ error: (error as Error).message });
           throw error;
@@ -153,6 +163,8 @@ export const useHabitStore = create<HabitState>()(
               ? state.logs.map((l) => (l.id === existingLog.id ? log : l))
               : [...state.logs, log],
           }));
+
+          void syncHabitLog(log);
 
           // Calculate XP
           const xpEarned = input.completed ? 10 : input.partialCredit ? 5 : 0;
@@ -259,6 +271,21 @@ export const useHabitStore = create<HabitState>()(
         }
         longestStreak = Math.max(longestStreak, tempStreak);
 
+        const completionsByDay = completedLogs.reduce<Record<number, number>>((acc, log) => {
+          const day = new Date(log.date).getDay();
+          acc[day] = (acc[day] || 0) + 1;
+          return acc;
+        }, {});
+
+        const sortedDayCounts = Object.entries(completionsByDay).sort(
+          ([, a], [, b]) => (b ?? 0) - (a ?? 0)
+        );
+
+        const bestDay = sortedDayCounts.length ? Number(sortedDayCounts[0][0]) : 0;
+        const worstDay = sortedDayCounts.length
+          ? Number(sortedDayCounts[sortedDayCounts.length - 1][0])
+          : 0;
+
         return {
           habitId: id,
           totalCompletions: completedLogs.length,
@@ -269,8 +296,8 @@ export const useHabitStore = create<HabitState>()(
           averageCompletionRate: logs.length > 0
             ? completedLogs.length / logs.length
             : 0,
-          bestDay: 0, // TODO: Calculate
-          worstDay: 0, // TODO: Calculate
+          bestDay,
+          worstDay,
         };
       },
 

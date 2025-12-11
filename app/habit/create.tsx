@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   TextInput,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
@@ -31,8 +31,12 @@ const DAYS = [
 
 export default function CreateHabitScreen() {
   const router = useRouter();
+  const { habitId } = useLocalSearchParams<{ habitId?: string }>();
   const createHabit = useHabitStore((state) => state.createHabit);
+  const updateHabit = useHabitStore((state) => state.updateHabit);
+  const getHabitById = useHabitStore((state) => state.getHabitById);
   const isLoading = useHabitStore((state) => state.isLoading);
+  const existingHabit = habitId ? getHabitById(habitId) : undefined;
 
   const [name, setName] = useState('');
   const [icon, setIcon] = useState('⭐');
@@ -40,6 +44,16 @@ export default function CreateHabitScreen() {
   const [selectedDays, setSelectedDays] = useState([0, 1, 2, 3, 4, 5, 6]);
   const [anchorDescription, setAnchorDescription] = useState('');
   const [reminderEnabled, setReminderEnabled] = useState(false);
+
+  React.useEffect(() => {
+    if (!existingHabit) return;
+    setName(existingHabit.name);
+    setIcon(existingHabit.icon || '⭐');
+    setColor(existingHabit.color || '#3B82F6');
+    setSelectedDays(existingHabit.daysOfWeek || [0, 1, 2, 3, 4, 5, 6]);
+    setAnchorDescription(existingHabit.anchorDescription || '');
+    setReminderEnabled(existingHabit.reminderEnabled ?? false);
+  }, [existingHabit?.id]);
 
   const toggleDay = (day: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -54,15 +68,27 @@ export default function CreateHabitScreen() {
     if (!name.trim()) return;
 
     try {
-      await createHabit({
-        name: name.trim(),
-        icon,
-        color,
-        daysOfWeek: selectedDays,
-        anchorDescription: anchorDescription.trim() || undefined,
-        reminderEnabled,
-        frequencyType: selectedDays.length === 7 ? 'daily' : 'specific_days',
-      });
+      if (existingHabit && habitId) {
+        await updateHabit(habitId, {
+          name: name.trim(),
+          icon,
+          color,
+          daysOfWeek: selectedDays,
+          anchorDescription: anchorDescription.trim() || undefined,
+          reminderEnabled,
+          frequencyType: selectedDays.length === 7 ? 'daily' : 'specific_days',
+        });
+      } else {
+        await createHabit({
+          name: name.trim(),
+          icon,
+          color,
+          daysOfWeek: selectedDays,
+          anchorDescription: anchorDescription.trim() || undefined,
+          reminderEnabled,
+          frequencyType: selectedDays.length === 7 ? 'daily' : 'specific_days',
+        });
+      }
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
@@ -73,7 +99,7 @@ export default function CreateHabitScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header title="Create Habit" showBack />
+      <Header title={existingHabit ? 'Edit Habit' : 'Create Habit'} showBack />
 
       <ScrollView
         style={styles.scrollView}
@@ -82,7 +108,9 @@ export default function CreateHabitScreen() {
       >
         {/* Name */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>What habit do you want to build?</Text>
+          <Text style={styles.sectionTitle}>
+            {existingHabit ? 'Update your habit' : 'What habit do you want to build?'}
+          </Text>
           <Input
             placeholder="e.g., Morning meditation, Take vitamins..."
             value={name}
@@ -212,7 +240,7 @@ export default function CreateHabitScreen() {
         {/* Submit */}
         <View style={styles.actions}>
           <Button
-            title="Create Habit"
+            title={existingHabit ? 'Save Changes' : 'Create Habit'}
             onPress={handleCreate}
             loading={isLoading}
             disabled={!name.trim() || selectedDays.length === 0}

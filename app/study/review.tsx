@@ -117,7 +117,7 @@ export default function StudyReviewScreen() {
       <View style={styles.container}>
         <StatusBar barStyle="light-content" />
         <LinearGradient
-          colors={gradients.focus as [string, string]}
+          colors={[...gradients.focus]}
           style={styles.completeGradient}
         >
           <Animated.View entering={FadeIn} style={styles.completeContent}>

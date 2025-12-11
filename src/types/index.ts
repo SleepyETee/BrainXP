@@ -30,6 +30,10 @@ export * from './notes';
 
 // AI Tools types (Goblin.tools-inspired)
 export * from './aiTools';
+// Timeline types
+export * from './timeline';
+// Upshift types
+export * from './upshift';
 
 // Common types
 export interface ApiResponse<T> {

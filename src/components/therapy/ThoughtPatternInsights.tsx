@@ -123,7 +123,7 @@ export const ThoughtPatternInsights: React.FC<ThoughtPatternInsightsProps> = ({
   return (
     <View style={styles.container}>
       {/* Main Insight Card */}
-      <Card style={[styles.mainCard, { borderLeftColor: topPatternInfo.color }]}>
+      <Card style={StyleSheet.flatten([styles.mainCard, { borderLeftColor: topPatternInfo.color }])}>
         <View style={styles.mainHeader}>
           <Text style={styles.mainEmoji}>{topPatternInfo.emoji}</Text>
           <View style={styles.mainHeaderText}>

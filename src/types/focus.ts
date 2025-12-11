@@ -9,11 +9,18 @@ export type BackgroundSound =
   | 'fireplace'
   | 'lo_fi';
 
+export type FocusSessionStatus = 'active' | 'completed' | 'cancelled' | 'interrupted' | 'extended';
+
 export interface FocusSession {
   id: string;
   userId: string;
   taskId?: string;
+  timelineBlockId?: string;
   taskDescription: string;
+  sessionType?: 'pomodoro' | 'deep_work' | 'sprint';
+  breakDuration?: number;
+  longBreakDuration?: number;
+  autoContinue?: boolean;
   plannedDuration: number; // in minutes
   actualDuration?: number; // in minutes
   startTime: string;
@@ -23,7 +30,9 @@ export interface FocusSession {
   qualityRating?: number; // 1-5
   completedTask: boolean;
   xpEarned: number;
-  isActive: boolean;
+  isActive?: boolean; // legacy flag, prefer status
+  status?: FocusSessionStatus;
+  outcome?: string;
 }
 
 export interface FocusInterruption {
@@ -38,11 +47,19 @@ export interface StartFocusSessionInput {
   plannedDuration: number;
   taskId?: string;
   backgroundSound?: BackgroundSound;
+  sessionType?: 'pomodoro' | 'deep_work' | 'sprint';
+  breakDuration?: number;
+  longBreakDuration?: number;
+  autoContinue?: boolean;
+  timelineBlockId?: string;
 }
 
 export interface EndFocusSessionInput {
   qualityRating?: number;
   completedTask?: boolean;
+  actualDuration?: number;
+  interruptions?: FocusInterruption[];
+  outcome?: string;
 }
 
 export interface FocusSessionResult {
@@ -73,4 +90,20 @@ export interface FocusPreferences {
   autoStartBreaks: boolean;
   breakDuration: number;
   dailyGoalMinutes: number;
+}
+
+export interface FocusTimerPreset {
+  id: string;
+  label: string;
+  work: number;
+  shortBreak: number;
+  longBreak: number;
+  sessions: number;
+}
+
+export interface FocusWidgetSummary {
+  presets: FocusTimerPreset[];
+  activeSession?: FocusSession | null;
+  todayMinutes: number;
+  todaySessions: number;
 }

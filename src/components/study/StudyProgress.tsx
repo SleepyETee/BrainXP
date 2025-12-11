@@ -36,15 +36,13 @@ export const StudyProgress: React.FC<StudyProgressProps> = ({
   const getModeInfo = () => {
     switch (mode) {
       case 'review':
-        return { emoji: '🔄', label: 'Review Session', color: gradients.focus };
+        return { emoji: '🔄', label: 'Review Session', color: gradients.focus.slice() as [string, string, string] };
       case 'learn':
         return { emoji: '📚', label: 'Learning', color: gradients.growth };
-      case 'cram':
-        return { emoji: '⚡', label: 'Cram Mode', color: gradients.energy };
-      case 'test':
-        return { emoji: '📝', label: 'Test', color: gradients.balance };
+      case 'quiz':
+        return { emoji: '📝', label: 'Quiz', color: gradients.balance };
       default:
-        return { emoji: '📚', label: 'Study', color: gradients.focus };
+        return { emoji: '📚', label: 'Study', color: gradients.focus.slice() as [string, string, string] };
     }
   };
 
@@ -62,7 +60,7 @@ export const StudyProgress: React.FC<StudyProgressProps> = ({
       <View style={styles.progressContainer}>
         <View style={styles.progressBar}>
           <LinearGradient
-            colors={[...modeInfo.color] as [string, string, ...string[]]}
+            colors={modeInfo.color as [string, string]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={[styles.progressFill, { width: `${progress}%` }]}

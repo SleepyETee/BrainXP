@@ -31,6 +31,14 @@ export interface WeekdayStats {
   averageHabitCompletion: number;
 }
 
+export interface MoodEntry {
+  id: string;
+  moodLevel: number;
+  energyLevel: number;
+  descriptor?: string;
+  timestamp: string;
+}
+
 // Overview stats
 export const getStats = async (): Promise<ProgressStats> => {
   const response = await apiClient.get<ApiResponse<ProgressStats>>('/analytics/stats');
@@ -96,6 +104,18 @@ export const getTimeDistribution = async (
 export const getWeekdayStats = async (): Promise<WeekdayStats[]> => {
   const response = await apiClient.get<ApiResponse<WeekdayStats[]>>(
     '/analytics/weekday-stats'
+  );
+  return response.data.data;
+};
+
+export const recordMood = async (
+  moodLevel: number,
+  energyLevel: number,
+  descriptor?: string
+): Promise<{ entry: MoodEntry; xpEarned: number }> => {
+  const response = await apiClient.post<ApiResponse<{ entry: MoodEntry; xpEarned: number }>>(
+    '/analytics/mood',
+    { moodLevel, energyLevel, descriptor }
   );
   return response.data.data;
 };

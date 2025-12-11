@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useRef } from 'react';
+import React, { useMemo, useCallback, useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { useProgressStore } from '../../src/stores/progressStore';
 import { colors } from '../../src/theme/colors';
 import { getShortDayNames } from '../../src/utils/date';
 import { HabitWithLogs } from '../../src/types/habit';
+import { getHabitSummary } from '../../src/services/api/habits';
 
 // Stable date values computed once per day
 const getDateInfo = () => {
@@ -39,6 +40,17 @@ export default function HabitsScreen() {
     if (!habitsData) return [];
     return habitsData.filter((h) => !h.archivedAt);
   }, [habitsData]);
+
+  const [summary, setSummary] = useState<{
+    totalHabits: number;
+    completedToday: number;
+    longestStreak: number;
+    completionRate: number;
+  } | null>(null);
+
+  useEffect(() => {
+    getHabitSummary().then(setSummary).catch(() => {});
+  }, []);
 
   const todayHabits = useMemo((): HabitWithLogs[] => {
     if (!habitsData || !logsData) return [];
@@ -149,6 +161,30 @@ export default function HabitsScreen() {
             </Text>
           )}
         </View>
+
+        {/* Summary */}
+        {summary && (
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Habits</Text>
+              <Text style={styles.summaryValue}>{summary.totalHabits}</Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Done Today</Text>
+              <Text style={styles.summaryValue}>{summary.completedToday}</Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Longest Streak</Text>
+              <Text style={styles.summaryValue}>{summary.longestStreak}🔥</Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Completion Rate</Text>
+              <Text style={styles.summaryValue}>
+                {Math.round(summary.completionRate * 100)}%
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Today's Habits */}
         <View style={styles.section}>
@@ -482,5 +518,31 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 14,
+  },
+  summaryCard: {
+    marginTop: 12,
+    marginBottom: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.gray[100],
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  summaryItem: {
+    width: '45%',
+  },
+  summaryLabel: {
+    color: colors.gray[500],
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  summaryValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.gray[900],
   },
 });

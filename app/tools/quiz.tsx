@@ -258,7 +258,7 @@ export default function QuizGeneratorScreen() {
       <StatusBar barStyle="light-content" />
       
       <LinearGradient
-        colors={gradients.growth as [string, string]}
+        colors={[...gradients.growth]}
         style={styles.headerGradient}
       >
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>

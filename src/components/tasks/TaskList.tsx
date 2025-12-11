@@ -6,7 +6,17 @@ import {
   StyleSheet,
   RefreshControl,
   ListRenderItem,
+  TouchableOpacity,
 } from 'react-native';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  FadeOut,
+  Layout,
+  SlideInRight,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Task } from '../../types/task';
 import { TaskCard } from './TaskCard';
 import { colors } from '../../theme/colors';
@@ -18,9 +28,12 @@ interface TaskListProps {
   onTaskDelete: (task: Task) => void;
   onTaskSnooze?: (task: Task) => void;
   onRefresh?: () => void;
+  onAddTask?: () => void;
   isRefreshing?: boolean;
+  isLoading?: boolean;
   emptyMessage?: string;
   emptyDescription?: string;
+  emptyIcon?: string;
   showSections?: boolean;
   compact?: boolean;
   ListHeaderComponent?: React.ReactElement;
@@ -29,8 +42,24 @@ interface TaskListProps {
 
 interface SectionData {
   title: string;
+  icon: string;
+  color: string;
   data: Task[];
 }
+
+// Skeleton loader for tasks
+const TaskSkeleton: React.FC<{ index: number }> = ({ index }) => (
+  <Animated.View
+    entering={FadeIn.delay(index * 100)}
+    style={styles.skeletonCard}
+  >
+    <View style={styles.skeletonCheckbox} />
+    <View style={styles.skeletonContent}>
+      <View style={styles.skeletonTitle} />
+      <View style={styles.skeletonMeta} />
+    </View>
+  </Animated.View>
+);
 
 export const TaskList: React.FC<TaskListProps> = ({
   tasks,
@@ -39,16 +68,19 @@ export const TaskList: React.FC<TaskListProps> = ({
   onTaskDelete,
   onTaskSnooze,
   onRefresh,
+  onAddTask,
   isRefreshing = false,
+  isLoading = false,
   emptyMessage = 'No tasks yet',
   emptyDescription = 'Tap the + button to add your first task',
+  emptyIcon = '📋',
   showSections = false,
   compact = false,
   ListHeaderComponent,
   ListFooterComponent,
 }) => {
   const renderItem: ListRenderItem<Task> = useCallback(
-    ({ item }) => (
+    ({ item, index }) => (
       <TaskCard
         task={item}
         onPress={() => onTaskPress(item)}
@@ -56,6 +88,7 @@ export const TaskList: React.FC<TaskListProps> = ({
         onDelete={() => onTaskDelete(item)}
         onSnooze={onTaskSnooze ? () => onTaskSnooze(item) : undefined}
         compact={compact}
+        index={index}
       />
     ),
     [onTaskPress, onTaskComplete, onTaskDelete, onTaskSnooze, compact]
@@ -63,15 +96,67 @@ export const TaskList: React.FC<TaskListProps> = ({
 
   const keyExtractor = useCallback((item: Task) => item.id, []);
 
+  // Loading state with skeletons
+  if (isLoading && tasks.length === 0) {
+    return (
+      <View style={styles.listContent}>
+        {ListHeaderComponent}
+        {[0, 1, 2, 3].map((i) => (
+          <TaskSkeleton key={i} index={i} />
+        ))}
+      </View>
+    );
+  }
+
   const renderEmpty = () => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyEmoji}>📋</Text>
+    <Animated.View 
+      entering={FadeInUp.delay(200).springify()}
+      style={styles.emptyContainer}
+    >
+      <View style={styles.emptyIconContainer}>
+        <LinearGradient
+          colors={[colors.primary[50], colors.primary[100]]}
+          style={styles.emptyIconGradient}
+        >
+          <Text style={styles.emptyEmoji}>{emptyIcon}</Text>
+        </LinearGradient>
+      </View>
       <Text style={styles.emptyMessage}>{emptyMessage}</Text>
       <Text style={styles.emptyDescription}>{emptyDescription}</Text>
-    </View>
+      {onAddTask && (
+        <TouchableOpacity
+          style={styles.emptyAddButton}
+          onPress={onAddTask}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={[colors.primary[500], colors.primary[600]]}
+            style={styles.emptyAddButtonGradient}
+          >
+            <Text style={styles.emptyAddButtonText}>+ Add Task</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
+    </Animated.View>
   );
 
   const ItemSeparator = () => <View style={styles.separator} />;
+
+  // Section header component
+  const renderSectionHeader = (section: SectionData) => (
+    <Animated.View 
+      entering={SlideInRight.delay(100)}
+      style={styles.sectionHeader}
+    >
+      <View style={[styles.sectionIconContainer, { backgroundColor: `${section.color}15` }]}>
+        <Text style={styles.sectionIcon}>{section.icon}</Text>
+      </View>
+      <Text style={[styles.sectionTitle, { color: section.color }]}>{section.title}</Text>
+      <View style={[styles.sectionBadge, { backgroundColor: section.color }]}>
+        <Text style={styles.sectionBadgeText}>{section.data.length}</Text>
+      </View>
+    </Animated.View>
+  );
 
   if (showSections) {
     const sections = groupTasksIntoSections(tasks);
@@ -83,10 +168,16 @@ export const TaskList: React.FC<TaskListProps> = ({
         ListHeaderComponent={
           <>
             {ListHeaderComponent}
-            {sections.map((section) => (
-              <View key={section.title} style={styles.section}>
-                <Text style={styles.sectionTitle}>{section.title}</Text>
-                {section.data.map((task) => (
+            {sections.length === 0 && renderEmpty()}
+            {sections.map((section, sectionIndex) => (
+              <Animated.View 
+                key={section.title} 
+                style={styles.section}
+                entering={FadeInDown.delay(sectionIndex * 100)}
+                layout={Layout.springify()}
+              >
+                {renderSectionHeader(section)}
+                {section.data.map((task, taskIndex) => (
                   <TaskCard
                     key={task.id}
                     task={task}
@@ -95,24 +186,28 @@ export const TaskList: React.FC<TaskListProps> = ({
                     onDelete={() => onTaskDelete(task)}
                     onSnooze={onTaskSnooze ? () => onTaskSnooze(task) : undefined}
                     compact={compact}
+                    index={taskIndex}
                   />
                 ))}
-              </View>
+              </Animated.View>
             ))}
           </>
         }
         ListFooterComponent={ListFooterComponent}
-        ListEmptyComponent={tasks.length === 0 ? renderEmpty : null}
         refreshControl={
           onRefresh ? (
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={onRefresh}
               tintColor={colors.primary[500]}
+              colors={[colors.primary[500]]}
             />
           ) : undefined
         }
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          sections.length === 0 && styles.emptyListContent,
+        ]}
         showsVerticalScrollIndicator={false}
       />
     );
@@ -133,6 +228,7 @@ export const TaskList: React.FC<TaskListProps> = ({
             refreshing={isRefreshing}
             onRefresh={onRefresh}
             tintColor={colors.primary[500]}
+            colors={[colors.primary[500]]}
           />
         ) : undefined
       }
@@ -182,19 +278,44 @@ function groupTasksIntoSections(tasks: Task[]): SectionData[] {
   const noDueDateTasks = tasks.filter((t) => !t.dueDate && t.status !== 'done');
 
   if (overdue.length > 0) {
-    sections.push({ title: 'Needs Attention', data: overdue });
+    sections.push({ 
+      title: 'Needs Attention', 
+      icon: '🚨', 
+      color: colors.danger[500],
+      data: overdue 
+    });
   }
   if (todayTasks.length > 0) {
-    sections.push({ title: 'Today', data: todayTasks });
+    sections.push({ 
+      title: 'Today', 
+      icon: '📅', 
+      color: colors.primary[500],
+      data: todayTasks 
+    });
   }
   if (thisWeekTasks.length > 0) {
-    sections.push({ title: 'This Week', data: thisWeekTasks });
+    sections.push({ 
+      title: 'This Week', 
+      icon: '📆', 
+      color: colors.success[500],
+      data: thisWeekTasks 
+    });
   }
   if (laterTasks.length > 0) {
-    sections.push({ title: 'Later', data: laterTasks });
+    sections.push({ 
+      title: 'Later', 
+      icon: '🔮', 
+      color: colors.gray[500],
+      data: laterTasks 
+    });
   }
   if (noDueDateTasks.length > 0) {
-    sections.push({ title: 'No Due Date', data: noDueDateTasks });
+    sections.push({ 
+      title: 'No Due Date', 
+      icon: '📥', 
+      color: colors.gray[400],
+      data: noDueDateTasks 
+    });
   }
 
   return sections;
@@ -210,39 +331,121 @@ const styles = StyleSheet.create({
   separator: {
     height: 4,
   },
+  // Empty state styles
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 40,
   },
+  emptyIconContainer: {
+    marginBottom: 20,
+  },
+  emptyIconGradient: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   emptyEmoji: {
-    fontSize: 48,
-    marginBottom: 16,
+    fontSize: 40,
   },
   emptyMessage: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: colors.gray[700],
     textAlign: 'center',
     marginBottom: 8,
   },
   emptyDescription: {
-    fontSize: 14,
+    fontSize: 15,
     color: colors.gray[500],
     textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
   },
+  emptyAddButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  emptyAddButtonGradient: {
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+  },
+  emptyAddButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Section styles
   section: {
-    marginBottom: 16,
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  sectionIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionIcon: {
+    fontSize: 14,
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.gray[500],
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    fontSize: 15,
+    fontWeight: '700',
+    flex: 1,
+  },
+  sectionBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  sectionBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  // Skeleton styles
+  skeletonCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginVertical: 4,
+    alignItems: 'center',
+  },
+  skeletonCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.gray[200],
+    marginRight: 12,
+  },
+  skeletonContent: {
+    flex: 1,
+    gap: 8,
+  },
+  skeletonTitle: {
+    height: 16,
+    backgroundColor: colors.gray[200],
+    borderRadius: 4,
+    width: '70%',
+  },
+  skeletonMeta: {
+    height: 12,
+    backgroundColor: colors.gray[100],
+    borderRadius: 4,
+    width: '40%',
   },
 });
 

@@ -98,3 +98,20 @@ export const getHabitCalendar = async (
 export const reorderHabits = async (habitIds: string[]): Promise<void> => {
   await apiClient.post('/habits/reorder', { habitIds });
 };
+
+export const getHabitSummary = async (): Promise<{
+  totalHabits: number;
+  completedToday: number;
+  longestStreak: number;
+  completionRate: number;
+}> => {
+  const response = await apiClient.get<
+    ApiResponse<{
+      totalHabits: number;
+      completedToday: number;
+      longestStreak: number;
+      completionRate: number;
+    }>
+  >('/habits/summary');
+  return response.data.data;
+};

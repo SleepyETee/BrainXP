@@ -16,7 +16,7 @@ import { useStudyStore } from '../../src/stores/studyStore';
 import { colors, shadows } from '../../src/theme/colors';
 
 const ICON_OPTIONS = ['📚', '🧠', '📖', '🎯', '💡', '🔬', '📐', '🌍', '💻', '🎨'];
-const COLOR_OPTIONS = [
+const COLOR_OPTIONS: string[] = [
   colors.primary[500],
   colors.secondary[500],
   colors.success[500],

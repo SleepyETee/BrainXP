@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,6 +17,7 @@ import { Input, TextArea } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { colors } from '../../theme/colors';
 import { CreateTaskInput, TaskPriority, EnergyLevel } from '../../types/task';
+import { matchProject, ProjectCandidate, ProjectMatchResult } from '../../services/api/ai';
 
 const taskSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title is too long'),
@@ -26,6 +28,7 @@ const taskSchema = z.object({
   priority: z.enum(['urgent_important', 'important', 'urgent', 'low', 'none']),
   energyRequired: z.enum(['low', 'medium', 'high']),
   tags: z.array(z.string()).optional(),
+  projectId: z.string().optional(),
   smallestFirstStep: z.string().max(200).optional(),
 });
 
@@ -37,6 +40,7 @@ interface TaskFormProps {
   onCancel: () => void;
   isLoading?: boolean;
   submitLabel?: string;
+  availableProjects?: ProjectCandidate[];
 }
 
 const PRIORITY_OPTIONS: { value: TaskPriority; label: string; color: string }[] = [
@@ -55,16 +59,29 @@ const ENERGY_OPTIONS: { value: EnergyLevel; label: string; emoji: string }[] = [
 
 const TIME_PRESETS = [5, 15, 25, 45, 60, 90];
 
+const DEFAULT_PROJECTS: ProjectCandidate[] = [
+  { id: 'work', name: 'Work' },
+  { id: 'home', name: 'Home / Life' },
+  { id: 'health', name: 'Health' },
+  { id: 'learning', name: 'Learning' },
+];
+
 export const TaskForm: React.FC<TaskFormProps> = ({
   initialValues,
   onSubmit,
   onCancel,
   isLoading = false,
   submitLabel = 'Create Task',
+  availableProjects,
 }) => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [tagInput, setTagInput] = useState('');
+  const [projectSuggestion, setProjectSuggestion] = useState<ProjectMatchResult['recommendedProject'] | null>(null);
+  const [projectLoading, setProjectLoading] = useState(false);
+  const [projectError, setProjectError] = useState<string | null>(null);
+  const [hasAutoSuggestedProject, setHasAutoSuggestedProject] = useState(false);
+  const projectOptions = (availableProjects && availableProjects.length ? availableProjects : DEFAULT_PROJECTS);
 
   const {
     control,
@@ -83,6 +100,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
       priority: initialValues?.priority || 'none',
       energyRequired: initialValues?.energyRequired || 'medium',
       tags: initialValues?.tags || [],
+      projectId: initialValues?.projectId,
       smallestFirstStep: initialValues?.smallestFirstStep || '',
     },
   });
@@ -90,6 +108,9 @@ export const TaskForm: React.FC<TaskFormProps> = ({
   const watchedTags = watch('tags') || [];
   const watchedDueDate = watch('dueDate');
   const watchedEstimate = watch('estimatedMinutes');
+  const watchedProjectId = watch('projectId');
+  const watchedTitle = watch('title');
+  const watchedDescription = watch('description');
 
   const handleAddTag = () => {
     if (tagInput.trim() && !watchedTags.includes(tagInput.trim())) {
@@ -101,6 +122,47 @@ export const TaskForm: React.FC<TaskFormProps> = ({
   const handleRemoveTag = (tag: string) => {
     setValue('tags', watchedTags.filter((t) => t !== tag));
   };
+
+  const handleSelectProject = (projectId: string) => {
+    setValue('projectId', projectId);
+    setProjectSuggestion(null);
+  };
+
+  const handleMatchProject = async () => {
+    if (!watchedTitle?.trim()) {
+      setProjectError('Add a title first to get a suggestion');
+      return;
+    }
+
+    setProjectLoading(true);
+    setProjectError(null);
+
+    try {
+      const result = await matchProject({
+        taskTitle: watchedTitle.trim(),
+        taskDescription: watchedDescription,
+        projects: projectOptions,
+      });
+      setProjectSuggestion(result.recommendedProject);
+      setValue('projectId', result.recommendedProject.id);
+    } catch (error) {
+      console.error('Failed to match project:', error);
+      setProjectError('Could not get a suggestion right now');
+    } finally {
+      setProjectLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (hasAutoSuggestedProject) return;
+    if (!initialValues?.title) return;
+    if (projectLoading) return;
+    if (initialValues?.projectId) return;
+    if (!watchedTitle?.trim()) return;
+
+    setHasAutoSuggestedProject(true);
+    handleMatchProject();
+  }, [hasAutoSuggestedProject, projectLoading, initialValues?.projectId, watchedTitle]);
 
   const handleFormSubmit = async (data: TaskFormData) => {
     await onSubmit(data as CreateTaskInput);
@@ -165,6 +227,57 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             />
           )}
         />
+
+        {/* Project (optional) */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Project (optional)</Text>
+          <View style={styles.projectChips}>
+            {projectOptions.map((project) => (
+              <TouchableOpacity
+                key={project.id}
+                style={[
+                  styles.projectChip,
+                  watchedProjectId === project.id && styles.projectChipActive,
+                ]}
+                onPress={() => handleSelectProject(project.id)}
+              >
+                <Text
+                  style={[
+                    styles.projectChipText,
+                    watchedProjectId === project.id && styles.projectChipTextActive,
+                  ]}
+                >
+                  {project.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {projectSuggestion && (
+            <View style={styles.projectSuggestion}>
+              <Text style={styles.projectSuggestionTitle}>✨ Suggested: {projectSuggestion.name}</Text>
+              {projectSuggestion.reason && (
+                <Text style={styles.projectSuggestionReason}>{projectSuggestion.reason}</Text>
+              )}
+              {typeof projectSuggestion.confidence === 'number' && (
+                <Text style={styles.projectConfidence}>
+                  Confidence: {(projectSuggestion.confidence * 100).toFixed(0)}%
+                </Text>
+              )}
+            </View>
+          )}
+          {projectError && <Text style={styles.errorText}>{projectError}</Text>}
+          <TouchableOpacity
+            style={[styles.projectButton, projectLoading && styles.buttonDisabled]}
+            onPress={handleMatchProject}
+            disabled={projectLoading}
+          >
+            {projectLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.projectButtonText}>Ask AI to suggest a project</Text>
+            )}
+          </TouchableOpacity>
+        </View>
 
         {/* Due Date */}
         <View style={styles.fieldGroup}>
@@ -466,6 +579,72 @@ const styles = StyleSheet.create({
   energyTextActive: {
     fontWeight: '600',
     color: colors.primary[700],
+  },
+  projectChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  projectChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+    backgroundColor: '#FFFFFF',
+  },
+  projectChipActive: {
+    borderColor: colors.primary[500],
+    backgroundColor: colors.primary[50],
+  },
+  projectChipText: {
+    color: colors.gray[700],
+    fontWeight: '500',
+  },
+  projectChipTextActive: {
+    color: colors.primary[700],
+  },
+  projectSuggestion: {
+    backgroundColor: colors.primary[50],
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.primary[100],
+    marginBottom: 10,
+  },
+  projectSuggestionTitle: {
+    fontWeight: '700',
+    color: colors.primary[700],
+    marginBottom: 4,
+  },
+  projectSuggestionReason: {
+    color: colors.gray[700],
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  projectConfidence: {
+    color: colors.gray[500],
+    fontSize: 12,
+  },
+  projectButton: {
+    marginTop: 8,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: colors.primary[600],
+  },
+  projectButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  errorText: {
+    color: colors.danger ? colors.danger[500] : '#DC2626',
+    marginBottom: 6,
+    fontSize: 12,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   tagInputRow: {
     flexDirection: 'row',

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import Animated, { FadeIn, FadeInDown, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { SpoonEstimate, SpoonLevel, EstimateSpoonInput } from '../../types/aiTools';
+import { SpoonEstimate, EstimateSpoonInput } from '../../types/aiTools';
 import { colors, shadows } from '../../theme/colors';
 import { springConfigs } from '../../utils/animations';
 import { estimateSpoons } from '../../services/api/aiTools';
@@ -98,6 +98,20 @@ export const SpoonEstimator: React.FC<SpoonEstimatorProps> = ({
         ))}
       </View>
     );
+  };
+
+  const getImpactColor = (impact: string | number) => {
+    const impactStr = String(impact).toLowerCase();
+    if (impactStr === 'high' || Number(impact) >= 4) return { bg: colors.danger[100], text: colors.danger[700] };
+    if (impactStr === 'medium' || Number(impact) >= 2) return { bg: colors.warning[100], text: colors.warning[700] };
+    return { bg: colors.success[100], text: colors.success[700] };
+  };
+
+  const getImpactLabel = (impact: string | number) => {
+    if (typeof impact === 'string') return impact.toUpperCase();
+    if (impact >= 4) return 'HIGH';
+    if (impact >= 2) return 'MEDIUM';
+    return 'LOW';
   };
 
   return (
@@ -192,71 +206,76 @@ export const SpoonEstimator: React.FC<SpoonEstimatorProps> = ({
           {/* Spoon Count */}
           <View style={styles.resultCard}>
             <Text style={styles.resultLabel}>Energy Cost</Text>
-            {renderSpoonMeter(estimate.spoons ?? estimate.spoonsCost ?? 3)}
-            <Text style={[styles.resultValue, { color: getSpoonColor(estimate.spoons ?? estimate.spoonsCost ?? 3) }]}>
+            {renderSpoonMeter(estimate.spoons)}
+            <Text style={[styles.resultValue, { color: getSpoonColor(estimate.spoons) }]}>
               {estimate.label}
             </Text>
-            <Text style={styles.resultEmoji}>{estimate.emoji}</Text>
+            <Text style={styles.resultEmoji}>{estimate.emoji ?? '🥄🥄🥄'}</Text>
           </View>
 
           {/* Explanation */}
           <View style={styles.explanationCard}>
-            <Text style={styles.explanationText}>{estimate.explanation}</Text>
+            <Text style={styles.explanationText}>{estimate.explanation ?? 'Energy cost estimated based on task complexity.'}</Text>
           </View>
 
           {/* Factors */}
-          {estimate.factors && estimate.factors.length > 0 && (
-            <View style={styles.factorsCard}>
-              <Text style={styles.factorsTitle}>🔍 Contributing Factors</Text>
-              {estimate.factors.map((factor, index) => (
-                <View key={index} style={styles.factor}>
-                  <View style={styles.factorHeader}>
-                    <Text style={styles.factorName}>{factor.name}</Text>
-                    <View
+          <View style={styles.factorsCard}>
+            <Text style={styles.factorsTitle}>🔍 Contributing Factors</Text>
+            {estimate.factors.map((factor, index) => (
+              <View key={index} style={styles.factor}>
+                <View style={styles.factorHeader}>
+                  <Text style={styles.factorName}>{factor.name}</Text>
+                  <View
+                    style={[
+                      styles.factorImpact,
+                      {
+                        backgroundColor:
+                          factor.impact === 'high'
+                            ? colors.danger[100]
+                            : factor.impact === 'medium'
+                            ? colors.warning[100]
+                            : colors.success[100],
+                      },
+                    ]}
+                  >
+                    <Text
                       style={[
-                        styles.factorImpact,
+                        styles.factorImpactText,
                         {
-                          backgroundColor:
+                          color:
                             factor.impact === 'high'
-                              ? colors.danger[100]
+                              ? colors.danger[700]
                               : factor.impact === 'medium'
-                              ? colors.warning[100]
-                              : colors.success[100],
+                              ? colors.warning[700]
+                              : colors.success[700],
                         },
                       ]}
                     >
-                      <Text
-                        style={[
-                          styles.factorImpactText,
-                          {
-                            color:
-                              factor.impact === 'high'
-                                ? colors.danger[700]
-                                : factor.impact === 'medium'
-                                ? colors.warning[700]
-                                : colors.success[700],
-                          },
-                        ]}
-                      >
-                        {factor.impact.toUpperCase()}
-                      </Text>
-                    </View>
+                      {factor.impact.toUpperCase()}
+                    </Text>
                   </View>
-                  <Text style={styles.factorDescription}>{factor.description}</Text>
                 </View>
-              ))}
-            </View>
-          )}
+                <Text style={styles.factorDescription}>{factor.description}</Text>
+              </View>
+            ))}
+          </View>
 
           {/* Feasibility */}
           {estimate.feasibility && typeof estimate.feasibility === 'string' && (
             <View style={styles.feasibilityCard}>
               <Text style={styles.feasibilityTitle}>📊 Based on Your Energy</Text>
               <Text style={styles.feasibilityValue}>
-                {estimate.feasibility === 'easy' && '✅ Easy - You got this!'}
-                {estimate.feasibility === 'manageable' && '👍 Manageable - Pace yourself'}
-                {estimate.feasibility === 'challenging' && '⚠️ Challenging - Consider breaking it down'}
-                {estimate.feasibility === 'difficult' && '🚨 Difficult - Maybe save for later'}
+                {typeof estimate.feasibility === 'string' ? (
+                  <>
+                    {estimate.feasibility === 'easy' && '✅ Easy - You got this!'}
+                    {estimate.feasibility === 'manageable' && '👍 Manageable - Pace yourself'}
+                    {estimate.feasibility === 'challenging' && '⚠️ Challenging - Consider breaking it down'}
+                    {estimate.feasibility === 'difficult' && '🚨 Difficult - Maybe save for later'}
+                    {!['easy', 'manageable', 'challenging', 'difficult'].includes(estimate.feasibility) && estimate.feasibility}
+                  </>
+                ) : (
+                  estimate.feasibility.recommendation
+                )}
               </Text>
               {estimate.adjustedSuggestion && (
                 <Text style={styles.feasibilitySuggestion}>
@@ -267,17 +286,15 @@ export const SpoonEstimator: React.FC<SpoonEstimatorProps> = ({
           )}
 
           {/* Suggestions */}
-          {(estimate.suggestions || estimate.tips) && (estimate.suggestions || estimate.tips)!.length > 0 && (
-            <View style={styles.suggestionsCard}>
-              <Text style={styles.suggestionsTitle}>💡 Tips to Make It Easier</Text>
-              {(estimate.suggestions || estimate.tips)!.map((suggestion, index) => (
-                <View key={index} style={styles.suggestion}>
-                  <Text style={styles.suggestionBullet}>•</Text>
-                  <Text style={styles.suggestionText}>{suggestion}</Text>
-                </View>
-              ))}
-            </View>
-          )}
+          <View style={styles.suggestionsCard}>
+            <Text style={styles.suggestionsTitle}>💡 Tips to Make It Easier</Text>
+            {estimate.suggestions.map((suggestion, index) => (
+              <View key={index} style={styles.suggestion}>
+                <Text style={styles.suggestionBullet}>•</Text>
+                <Text style={styles.suggestionText}>{suggestion}</Text>
+              </View>
+            ))}
+          </View>
 
           {/* Try Another */}
           <TouchableOpacity

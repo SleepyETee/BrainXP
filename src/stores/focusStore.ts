@@ -10,12 +10,19 @@ import {
   BackgroundSound,
   FocusStats,
   FocusPreferences,
+  FocusTimerPreset,
+  FocusWidgetSummary,
 } from '../types/focus';
+import { getPresets, getFocusWidgetSummary } from '../services/api/focus';
+import { syncFocusSession } from '../services/upshift';
+import { useAuthStore } from './authStore';
 
 interface FocusState {
   currentSession: FocusSession | null;
   sessions: FocusSession[];
   preferences: FocusPreferences;
+  presets: FocusTimerPreset[];
+  widgetSummary: FocusWidgetSummary | null;
   isLoading: boolean;
   error: string | null;
 
@@ -28,6 +35,8 @@ interface FocusState {
   endSession: (input?: EndFocusSessionInput) => Promise<FocusSessionResult>;
   setBackgroundSound: (sound: BackgroundSound) => void;
   updatePreferences: (prefs: Partial<FocusPreferences>) => void;
+  fetchPresets: () => Promise<void>;
+  fetchWidgetSummary: () => Promise<void>;
 
   // Selectors
   getSessionById: (id: string) => FocusSession | undefined;
@@ -37,6 +46,7 @@ interface FocusState {
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
+const getUserId = () => useAuthStore.getState().user?.id || 'local-user';
 
 const defaultPreferences: FocusPreferences = {
   defaultDuration: 25,
@@ -54,15 +64,22 @@ export const useFocusStore = create<FocusState>()(
       currentSession: null,
       sessions: [],
       preferences: defaultPreferences,
+      presets: [],
+      widgetSummary: null,
       isLoading: false,
       error: null,
 
       startSession: (input) => {
         const session: FocusSession = {
           id: generateId(),
-          userId: '1', // TODO: Get from auth store
+          userId: getUserId(),
           taskId: input.taskId,
+          timelineBlockId: input.timelineBlockId,
           taskDescription: input.taskDescription,
+          sessionType: input.sessionType || 'pomodoro',
+          breakDuration: input.breakDuration ?? 5,
+          longBreakDuration: input.longBreakDuration ?? 15,
+          autoContinue: input.autoContinue ?? false,
           plannedDuration: input.plannedDuration,
           startTime: new Date().toISOString(),
           interruptions: [],
@@ -70,6 +87,7 @@ export const useFocusStore = create<FocusState>()(
           completedTask: false,
           xpEarned: 0,
           isActive: true,
+          status: 'active',
         };
 
         set({ currentSession: session });
@@ -151,12 +169,16 @@ export const useFocusStore = create<FocusState>()(
           completedTask: input?.completedTask || false,
           xpEarned,
           isActive: false,
+          status: 'completed',
+          outcome: input?.completedTask ? 'completed_task' : 'stopped',
         };
 
         set((state) => ({
           currentSession: null,
           sessions: [...state.sessions, completedSession],
         }));
+
+        void syncFocusSession(completedSession);
 
         const todayMinutes = get().getTodayFocusMinutes();
 
@@ -181,6 +203,24 @@ export const useFocusStore = create<FocusState>()(
         set((state) => ({
           preferences: { ...state.preferences, ...prefs },
         }));
+      },
+
+      fetchPresets: async () => {
+        try {
+          const presets = await getPresets();
+          set({ presets });
+        } catch (error) {
+          set({ error: (error as Error).message });
+        }
+      },
+
+      fetchWidgetSummary: async () => {
+        try {
+          const summary = await getFocusWidgetSummary();
+          set({ widgetSummary: summary });
+        } catch (error) {
+          set({ error: (error as Error).message });
+        }
       },
 
       // Selectors
@@ -258,6 +298,24 @@ export const useFocusStore = create<FocusState>()(
           ...completedSessions.map((s) => s.actualDuration || 0)
         );
 
+        const completedDays = new Set(
+          completedSessions
+            .map((s) => new Date(s.endTime || s.startTime).toISOString().split('T')[0])
+            .filter(Boolean)
+        );
+
+        let currentDayStreak = 0;
+        const today = new Date();
+        while (true) {
+          const dayString = today.toISOString().split('T')[0];
+          if (completedDays.has(dayString)) {
+            currentDayStreak += 1;
+            today.setDate(today.getDate() - 1);
+          } else {
+            break;
+          }
+        }
+
         return {
           totalSessions: completedSessions.length,
           totalMinutes,
@@ -267,7 +325,7 @@ export const useFocusStore = create<FocusState>()(
           favoriteBackgroundSound: favoriteSound,
           mostProductiveHour,
           longestSession,
-          currentDayStreak: 0, // TODO: Calculate
+          currentDayStreak,
         };
       },
     }),

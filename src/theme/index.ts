@@ -19,6 +19,8 @@ export * from './typography';
 export { spacing, borderRadius } from './spacing';
 export { shadows as spacingShadows } from './spacing';
 export type { Spacing, BorderRadius } from './spacing';
+export { ThemeProvider, useTheme } from './theme';
+export type { PaletteMode } from './palettes';
 
 import { colors, semanticColors, shadows } from './colors';
 import { typography, fontSizes, fontWeights, lineHeights } from './typography';

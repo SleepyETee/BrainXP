@@ -14,6 +14,7 @@ import { EnergySlider } from '../../src/components/wellness/EnergySlider';
 import { Button } from '../../src/components/ui/Button';
 import { Header } from '../../src/components/common/Header';
 import { useProgressStore } from '../../src/stores/progressStore';
+import { recordMood } from '../../src/services/api/analytics';
 import { colors } from '../../src/theme/colors';
 
 export default function MoodScreen() {
@@ -36,15 +37,19 @@ export default function MoodScreen() {
     if (!mood || !energy) return;
 
     setIsSubmitting(true);
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    try {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    // Award XP for mood check-in
-    await addXP(5, 'mood_checkin', 'Mood check-in completed');
+      const result = await recordMood(mood.level, energy, mood.descriptor);
+      const xp = result?.xpEarned ?? 5;
+      await addXP(xp, 'mood_checkin', 'Mood check-in completed');
 
-    // TODO: Save to backend
-    console.log('Mood entry:', { mood, energy });
-
-    router.back();
+      router.back();
+    } catch (error) {
+      console.error('Failed to save mood entry:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const canSubmit = mood && energy;

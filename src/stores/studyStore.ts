@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuthStore } from './authStore';
 import {
   StudySet,
   Flashcard,
@@ -10,6 +11,7 @@ import {
   FlashcardReview,
   calculateSM2,
   StudyMode,
+  CreateStudySetInput,
 } from '../types/study';
 
 interface StudyStats {
@@ -26,6 +28,7 @@ interface StudyState {
   quizzes: Quiz[];
   quizAttempts: QuizAttempt[];
   flashcards: Record<string, Flashcard[]>;
+  flashcards: Record<string, Flashcard[]>;
   stats: StudyStats | null;
   activeSession: StudySession | null;
   sessionCards: Flashcard[];
@@ -33,7 +36,7 @@ interface StudyState {
   isLoading: boolean;
   
   // Study Set Actions
-  createStudySet: (input: { title: string; description?: string; icon?: string; color?: string }) => StudySet;
+  createStudySet: (title: string, description?: string) => StudySet;
   updateStudySet: (id: string, updates: Partial<StudySet>) => void;
   deleteStudySet: (id: string) => void;
   fetchStudySets: () => Promise<void>;
@@ -66,6 +69,7 @@ interface StudyState {
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
+const getUserId = () => useAuthStore.getState().user?.id || 'local-user';
 
 export const useStudyStore = create<StudyState>()(
   persist(
@@ -117,10 +121,8 @@ export const useStudyStore = create<StudyState>()(
         const studySet: StudySet = {
           id: generateId(),
           userId: '1',
-          title: input.title,
-          description: input.description,
-          icon: input.icon,
-          color: input.color,
+          title,
+          description,
           isPublic: false,
           isFavorite: false,
           aiGenerated: false,
@@ -311,7 +313,7 @@ export const useStudyStore = create<StudyState>()(
         const session: StudySession = {
           id: generateId(),
           studySetId,
-          userId: '1',
+          userId: getUserId(),
           mode,
           cardsTotal: cardsToReview.length,
           cardsReviewed: 0,
@@ -431,7 +433,7 @@ export const useStudyStore = create<StudyState>()(
         const attempt: QuizAttempt = {
           id: generateId(),
           quizId,
-          userId: '1',
+          userId: getUserId(),
           score: (pointsEarned / quiz.totalPoints) * 100,
           pointsEarned,
           pointsTotal: quiz.totalPoints,

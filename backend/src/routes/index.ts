@@ -7,6 +7,11 @@ import aiToolsRouter from './aiTools.js';
 import studyRouter from './study.js';
 import captureRouter from './capture.js';
 import analyticsRouter from './analytics.js';
+import timelineRouter from './timeline.js';
+import trackingRouter from './tracking.js';
+import mindmapRouter from './mindmap.js';
+import lessonsRouter from './lessons.js';
+import gamificationRouter from './gamification.js';
 
 const router = Router();
 
@@ -35,6 +40,11 @@ router.get('/', (req: Request, res: Response) => {
       study: '/api/study',
       captures: '/api/captures',
       analytics: '/api/analytics',
+      timeline: '/api/timeline',
+      tracking: '/api/tracking',
+      mindmap: '/api/mindmap',
+      lessons: '/api/lessons',
+      gamification: '/api/gamification',
     },
   });
 });
@@ -48,5 +58,10 @@ router.use('/ai-tools', aiToolsRouter);
 router.use('/study', studyRouter);
 router.use('/captures', captureRouter);
 router.use('/analytics', analyticsRouter);
+router.use('/timeline', timelineRouter);
+router.use('/tracking', trackingRouter);
+router.use('/mindmap', mindmapRouter);
+router.use('/lessons', lessonsRouter);
+router.use('/gamification', gamificationRouter);
 
 export default router;

@@ -119,3 +119,45 @@ export const searchTasks = async (query: string): Promise<Task[]> => {
   });
   return response.data.data;
 };
+
+export const getTaskLists = async (): Promise<{ lists: any[] }> => {
+  const response = await apiClient.get<ApiResponse<{ lists: any[] }>>('/tasks/lists');
+  return response.data.data;
+};
+
+export const getSmartLists = async (): Promise<{ smartLists: any[] }> => {
+  const response = await apiClient.get<ApiResponse<{ smartLists: any[] }>>('/tasks/smart-lists');
+  return response.data.data;
+};
+
+export const getSmartListTasks = async (slug: string): Promise<{ smartList: any; tasks: Task[] }> => {
+  const response = await apiClient.get<ApiResponse<{ smartList: any; tasks: Task[] }>>(
+    `/tasks/smart-lists/${slug}`
+  );
+  return response.data.data;
+};
+
+export const quickAddTask = async (text: string, listId?: string): Promise<Task> => {
+  const response = await apiClient.post<ApiResponse<{ task: Task }>>('/tasks/quick-add', {
+    text,
+    listId,
+  });
+  return response.data.data.task;
+};
+
+export const getTaskWidgetSummary = async (): Promise<{
+  widgets: any[];
+  today: { count: number; tasks: Task[] };
+  next7Days: { count: number; tasks: Task[] };
+  pinnedLists: any[];
+}> => {
+  const response = await apiClient.get<
+    ApiResponse<{
+      widgets: any[];
+      today: { count: number; tasks: Task[] };
+      next7Days: { count: number; tasks: Task[] };
+      pinnedLists: any[];
+    }>
+  >('/tasks/widgets/summary');
+  return response.data.data;
+};
