@@ -12,7 +12,9 @@ import { Task } from '../types/task';
 import { Habit, HabitLog } from '../types/habit';
 import { FocusSession } from '../types/focus';
 import { useSettingsStore } from '../stores/settingsStore';
-import { useAuthStore } from '../stores/authStore';
+
+// Lazy import to avoid require cycle with authStore
+const getAuthStore = () => require('../stores/authStore').useAuthStore;
 
 // Env configuration:
 // - EXPO_PUBLIC_UPSHIFT_API_URL / EXPO_PUBLIC_UPSHIFT_API_KEY: public Upshift gateway
@@ -44,7 +46,7 @@ const buildEnvelope = <TPayload>(event: UpshiftEvent, payload: TPayload): Upshif
 });
 
 const getUserContext = (): UpshiftUser | null => {
-  const user = useAuthStore.getState().user;
+  const user = getAuthStore().getState().user;
   if (!user) return null;
   return {
     id: user.id,
@@ -162,7 +164,7 @@ const mapTask = (task: Task, userId: string): UpshiftTaskPayload => ({
   priority: task.priority,
   tags: task.tags,
   updatedAt: task.updatedAt,
-  completedAt: task.completedAt,
+  completedAt: task.completedAt ?? undefined,
 });
 
 const mapHabit = (habit: Habit, userId: string): UpshiftHabitPayload => ({
@@ -230,8 +232,8 @@ export const syncGoals = async (): Promise<SendResult> => {
   const user = getUserContext();
   if (!user) return { ok: false, skipped: true };
 
-  const goals = useAuthStore.getState().user?.primaryGoals || [];
-  const payload = goals.map((goal, idx) => mapGoal(goal, user.id, idx));
+  const goals = getAuthStore().getState().user?.primaryGoals || [];
+  const payload = goals.map((goal: string, idx: number) => mapGoal(goal, user.id, idx));
   return postEnvelope(buildEnvelope('goal_sync', { userId: user.id, goals: payload }));
 };
 
@@ -274,10 +276,10 @@ export const fetchRemoteGoals = async (): Promise<ApiResult<UpshiftGoalPayload[]
 export const upsertRemoteGoals = async (): Promise<ApiResult<unknown>> => {
   const user = getUserContext();
   if (!user) return { ok: false, skipped: true };
-  const goals = useAuthStore.getState().user?.primaryGoals || [];
+  const goals = getAuthStore().getState().user?.primaryGoals || [];
   return callUpshift('/goals', {
     method: 'PUT',
-    body: JSON.stringify(goals.map((goal, idx) => mapGoal(goal, user.id, idx))),
+    body: JSON.stringify(goals.map((goal: string, idx: number) => mapGoal(goal, user.id, idx))),
   });
 };
 

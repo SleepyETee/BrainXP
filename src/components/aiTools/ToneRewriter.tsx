@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import * as Clipboard from 'expo-clipboard';
 import { ToneStyle, RewriteResult, RewriteToneInput } from '../../types/aiTools';
 import { colors, shadows } from '../../theme/colors';
 import { rewriteTone } from '../../services/api/aiTools';
+import { useMLStore } from '../../stores/mlStore';
 
 interface ToneRewriterProps {
   initialText?: string;
@@ -45,6 +46,40 @@ export const ToneRewriter: React.FC<ToneRewriterProps> = ({
   const [result, setResult] = useState<RewriteResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [feedbackGiven, setFeedbackGiven] = useState(false);
+  const [toolUsageId, setToolUsageId] = useState<string | null>(null);
+  const [suggestedTones, setSuggestedTones] = useState<ToneStyle[]>([]);
+
+  const { submitFeedback, patterns, fetchPatterns, learningStats, fetchLearningStats } = useMLStore();
+
+  useEffect(() => {
+    fetchPatterns().catch(() => {});
+    fetchLearningStats().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (text.length > 20) {
+      const suggestions: ToneStyle[] = [];
+      const lowerText = text.toLowerCase();
+
+      if (lowerText.includes('dear') || lowerText.includes('sincerely') || lowerText.includes('regarding')) {
+        suggestions.push('casual', 'friendly');
+      }
+      if (lowerText.includes('hey') || lowerText.includes('gonna') || lowerText.includes('wanna')) {
+        suggestions.push('formal', 'professional');
+      }
+      if (text.split(' ').some(word => word.length > 12)) {
+        suggestions.push('simplified');
+      }
+      if (lowerText.includes('sorry') || lowerText.includes('apologize') || lowerText.includes('unfortunately')) {
+        suggestions.push('assertive', 'direct');
+      }
+
+      setSuggestedTones(suggestions.slice(0, 3));
+    } else {
+      setSuggestedTones([]);
+    }
+  }, [text]);
 
   const handleRewrite = async () => {
     if (!text.trim()) {
@@ -65,6 +100,9 @@ export const ToneRewriter: React.FC<ToneRewriterProps> = ({
         targetTone: selectedTone,
       };
 
+      const usageId = `tone-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      setToolUsageId(usageId);
+
       const rewriteResult = await rewriteTone(input);
       setResult(rewriteResult);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -75,6 +113,25 @@ export const ToneRewriter: React.FC<ToneRewriterProps> = ({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleFeedback = async (wasHelpful: boolean) => {
+    if (!toolUsageId || feedbackGiven) return;
+
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFeedbackGiven(true);
+
+    await submitFeedback(
+      toolUsageId,
+      wasHelpful,
+      undefined,
+      { 
+        originalLength: result?.original?.length,
+        rewrittenLength: result?.rewritten?.length,
+        tone: result?.tone,
+        wasCopied: copied,
+      }
+    );
   };
 
   const handleCopy = async () => {
@@ -90,21 +147,96 @@ export const ToneRewriter: React.FC<ToneRewriterProps> = ({
     setResult(null);
     setText('');
     setSelectedTone(null);
+    setFeedbackGiven(false);
+    setToolUsageId(null);
+  };
+
+  const renderMLBadge = () => {
+    if (!learningStats || learningStats.personalizationLevel === 'low') return null;
+
+    return (
+      <Animated.View entering={FadeIn} style={styles.mlBadge}>
+        <Text style={styles.mlBadgeIcon}>🧠</Text>
+        <Text style={styles.mlBadgeText}>
+          {learningStats.personalizationLevel === 'expert' 
+            ? 'Expert personalization active'
+            : learningStats.personalizationLevel === 'high'
+            ? 'Highly personalized'
+            : 'Learning your preferences'}
+        </Text>
+      </Animated.View>
+    );
+  };
+
+  const renderSuggestedTones = () => {
+    if (suggestedTones.length === 0) return null;
+
+    return (
+      <Animated.View entering={FadeInDown.delay(50)} style={styles.suggestedBanner}>
+        <Text style={styles.suggestedIcon}>💡</Text>
+        <Text style={styles.suggestedText}>
+          Suggested: {suggestedTones.map(t => 
+            TONE_OPTIONS.find(o => o.tone === t)?.label
+          ).join(', ')}
+        </Text>
+      </Animated.View>
+    );
+  };
+
+  const renderFeedbackSection = () => {
+    if (!result) return null;
+
+    if (feedbackGiven) {
+      return (
+        <Animated.View entering={FadeIn} style={styles.feedbackThanks}>
+          <Text style={styles.feedbackThanksEmoji}>🙏</Text>
+          <Text style={styles.feedbackThanksText}>
+            Thanks! Your feedback helps improve tone suggestions.
+          </Text>
+        </Animated.View>
+      );
+    }
+
+    return (
+      <Animated.View entering={FadeInDown.delay(400)} style={styles.feedbackCard}>
+        <Text style={styles.feedbackTitle}>Was this rewrite helpful?</Text>
+        <View style={styles.feedbackButtons}>
+          <TouchableOpacity
+            style={[styles.feedbackButton, styles.feedbackButtonPositive]}
+            onPress={() => handleFeedback(true)}
+          >
+            <Text style={styles.feedbackButtonEmoji}>👍</Text>
+            <Text style={styles.feedbackButtonText}>Yes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.feedbackButton, styles.feedbackButtonNegative]}
+            onPress={() => handleFeedback(false)}
+          >
+            <Text style={styles.feedbackButtonEmoji}>👎</Text>
+            <Text style={styles.feedbackButtonText}>No</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.feedbackHint}>
+          Your feedback improves future suggestions
+        </Text>
+      </Animated.View>
+    );
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Header */}
       <Animated.View entering={FadeIn} style={styles.header}>
         <Text style={styles.title}>✍️ Tone Rewriter</Text>
         <Text style={styles.subtitle}>
           Transform your text to match any tone
         </Text>
+        {renderMLBadge()}
       </Animated.View>
 
       {!result ? (
         <>
-          {/* Text Input */}
+          {renderSuggestedTones()}
+
           <Animated.View entering={FadeInDown.delay(100)} style={styles.inputGroup}>
             <Text style={styles.label}>Your Text</Text>
             <TextInput
@@ -119,7 +251,6 @@ export const ToneRewriter: React.FC<ToneRewriterProps> = ({
             <Text style={styles.charCount}>{text.length} characters</Text>
           </Animated.View>
 
-          {/* Tone Selection */}
           <Animated.View entering={FadeInDown.delay(200)} style={styles.inputGroup}>
             <Text style={styles.label}>Select Target Tone</Text>
             <View style={styles.toneGrid}>
@@ -129,6 +260,7 @@ export const ToneRewriter: React.FC<ToneRewriterProps> = ({
                   style={[
                     styles.toneOption,
                     selectedTone === option.tone && styles.toneOptionSelected,
+                    suggestedTones.includes(option.tone) && styles.toneOptionSuggested,
                   ]}
                   onPress={async () => {
                     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -144,6 +276,9 @@ export const ToneRewriter: React.FC<ToneRewriterProps> = ({
                   >
                     {option.label}
                   </Text>
+                  {suggestedTones.includes(option.tone) && (
+                    <View style={styles.suggestedDot} />
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
@@ -154,10 +289,8 @@ export const ToneRewriter: React.FC<ToneRewriterProps> = ({
             )}
           </Animated.View>
 
-          {/* Error */}
           {error && <Text style={styles.error}>{error}</Text>}
 
-          {/* Rewrite Button */}
           <Animated.View entering={FadeInDown.delay(300)}>
             <TouchableOpacity
               style={[styles.rewriteButton, isLoading && styles.rewriteButtonDisabled]}
@@ -176,9 +309,7 @@ export const ToneRewriter: React.FC<ToneRewriterProps> = ({
           </Animated.View>
         </>
       ) : (
-        /* Results */
         <Animated.View entering={FadeIn}>
-          {/* Original */}
           <View style={styles.resultSection}>
             <Text style={styles.resultLabel}>📝 Original</Text>
             <View style={styles.resultBox}>
@@ -186,7 +317,6 @@ export const ToneRewriter: React.FC<ToneRewriterProps> = ({
             </View>
           </View>
 
-          {/* Rewritten */}
           <View style={styles.resultSection}>
             <View style={styles.resultHeader}>
               <Text style={styles.resultLabel}>
@@ -204,12 +334,10 @@ export const ToneRewriter: React.FC<ToneRewriterProps> = ({
             </View>
           </View>
 
-          {/* Changes */}
           {result.changes && result.changes.length > 0 && (
             <View style={styles.changesSection}>
               <Text style={styles.changesTitle}>🔄 Key Changes Made</Text>
               {result.changes.map((change, index) => {
-                // Handle both string and object types for changes
                 if (typeof change === 'string') {
                   return (
                     <View key={index} style={styles.change}>
@@ -240,7 +368,6 @@ export const ToneRewriter: React.FC<ToneRewriterProps> = ({
             </View>
           )}
 
-          {/* Readability Score */}
           {result.readabilityScore && (
             <View style={styles.readabilityCard}>
               <Text style={styles.readabilityLabel}>📊 Readability Score</Text>
@@ -255,7 +382,8 @@ export const ToneRewriter: React.FC<ToneRewriterProps> = ({
             </View>
           )}
 
-          {/* Actions */}
+          {renderFeedbackSection()}
+
           <View style={styles.resultActions}>
             <TouchableOpacity style={styles.useButton} onPress={handleCopy}>
               <Text style={styles.useButtonText}>Use This Version</Text>
@@ -291,6 +419,116 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 15,
     color: colors.gray[500],
+  },
+  mlBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primary[100],
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  mlBadgeIcon: {
+    fontSize: 12,
+  },
+  mlBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary[700],
+  },
+  suggestedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary[50],
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  suggestedIcon: {
+    fontSize: 16,
+  },
+  suggestedText: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.primary[700],
+  },
+  toneOptionSuggested: {
+    borderColor: colors.primary[300],
+    backgroundColor: colors.primary[25] || colors.primary[50],
+  },
+  suggestedDot: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary[500],
+  },
+  feedbackCard: {
+    backgroundColor: colors.gray[50],
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  feedbackTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.gray[700],
+    marginBottom: 12,
+  },
+  feedbackButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 8,
+  },
+  feedbackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 6,
+  },
+  feedbackButtonPositive: {
+    backgroundColor: colors.success[100],
+  },
+  feedbackButtonNegative: {
+    backgroundColor: colors.danger[100],
+  },
+  feedbackButtonEmoji: {
+    fontSize: 16,
+  },
+  feedbackButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.gray[700],
+  },
+  feedbackHint: {
+    fontSize: 11,
+    color: colors.gray[400],
+  },
+  feedbackThanks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.success[50],
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+    gap: 8,
+  },
+  feedbackThanksEmoji: {
+    fontSize: 18,
+  },
+  feedbackThanksText: {
+    fontSize: 14,
+    color: colors.success[700],
   },
   inputGroup: {
     marginBottom: 20,

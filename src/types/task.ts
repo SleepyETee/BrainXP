@@ -98,20 +98,35 @@ export interface CreateTaskInput {
   subtasks?: { title: string; completed: boolean }[];
 }
 
-export interface UpdateTaskInput extends Partial<CreateTaskInput> {
+export interface UpdateTaskInput {
+  title?: string;
+  description?: string;
+  dueDate?: string;
+  dueTime?: string;
+  scheduledDate?: string;
+  scheduledTime?: string;
+  startDate?: string;
+  startTime?: string;
+  snoozedUntil?: string;
+  estimatedMinutes?: number;
+  priority?: TaskPriority;
+  energyRequired?: EnergyLevel;
+  energyLevel?: EnergyLevel;
+  tags?: string[];
+  parentTaskId?: string;
+  projectId?: string;
+  listId?: string;
+  context?: string;
+  smallestFirstStep?: string;
+  source?: TaskSource;
+  checklist?: ChecklistItem[];
   status?: TaskStatus;
   actualMinutes?: number;
   notes?: string;
   links?: string[];
   reminders?: Reminder[];
   recurrence?: RecurrenceRule;
-  subtasks?: {
-    id: string;
-    title: string;
-    status: TaskStatus;
-    order: number;
-    estimatedMinutes?: number;
-  }[];
+  subtasks?: Subtask[];
 }
 
 export interface AIDecompositionResult {

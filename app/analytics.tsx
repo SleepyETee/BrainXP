@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+conimport React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,23 +9,31 @@ import {
 import { Header } from '../src/components/common/Header';
 import { ProgressBar } from '../src/components/ui/ProgressBar';
 import { BadgeGrid, Badge } from '../src/components/gamification/BadgeGrid';
+import { XPHistory, XPEvent } from '../src/components/gamification/XPHistory';
 import { useProgressStore } from '../src/stores/progressStore';
 import { useTaskStore } from '../src/stores/taskStore';
 import { useHabitStore } from '../src/stores/habitStore';
 import { useFocusStore } from '../src/stores/focusStore';
 import { colors } from '../src/theme/colors';
 
-// Mock badges for now
+// Badge display data (maps to progress store badges)
 const ALL_BADGES: Badge[] = [
-  { id: '1', name: 'First Task', description: 'Complete your first task', icon: '🎯', category: 'tasks', rarity: 'common' },
-  { id: '2', name: 'Focus Master', description: 'Complete 10 focus sessions', icon: '⏰', category: 'focus', rarity: 'uncommon' },
-  { id: '3', name: 'Habit Hero', description: 'Build a 7-day streak', icon: '🔥', category: 'habits', rarity: 'rare' },
-  { id: '4', name: 'Early Bird', description: 'Complete a task before 9am', icon: '🌅', category: 'tasks', rarity: 'common' },
-  { id: '5', name: 'Deep Work', description: 'Complete a 60+ min session', icon: '🧠', category: 'focus', rarity: 'uncommon' },
-  { id: '6', name: 'Consistency King', description: '30-day streak', icon: '👑', category: 'streaks', rarity: 'epic' },
-  { id: '7', name: 'Inbox Zero', description: 'Clear your inbox 10 times', icon: '📭', category: 'tasks', rarity: 'uncommon' },
-  { id: '8', name: 'Zen Master', description: '50 breathing exercises', icon: '🧘', category: 'wellness', rarity: 'rare' },
-  { id: '9', name: 'Legendary Focus', description: '100 hours of focus time', icon: '⚡', category: 'focus', rarity: 'legendary' },
+  { id: 'task_1', name: 'First Step', description: 'Complete your first task', icon: '🎯', category: 'tasks', rarity: 'common' },
+  { id: 'task_10', name: 'Getting Things Done', description: 'Complete 10 tasks', icon: '✅', category: 'tasks', rarity: 'common' },
+  { id: 'task_50', name: 'Task Master', description: 'Complete 50 tasks', icon: '🏆', category: 'tasks', rarity: 'uncommon' },
+  { id: 'task_100', name: 'Productivity Pro', description: 'Complete 100 tasks', icon: '💎', category: 'tasks', rarity: 'rare' },
+  { id: 'focus_1', name: 'First Focus', description: 'Complete your first focus session', icon: '⏰', category: 'focus', rarity: 'common' },
+  { id: 'focus_10', name: 'Deep Worker', description: 'Complete 10 focus sessions', icon: '🧠', category: 'focus', rarity: 'uncommon' },
+  { id: 'focus_hour', name: 'Hour of Power', description: 'Complete a 60+ min session', icon: '⚡', category: 'focus', rarity: 'uncommon' },
+  { id: 'focus_100h', name: 'Legendary Focus', description: '100 hours of focus time', icon: '🌟', category: 'focus', rarity: 'legendary' },
+  { id: 'habit_1', name: 'Habit Starter', description: 'Log your first habit', icon: '🌱', category: 'habits', rarity: 'common' },
+  { id: 'habit_7', name: 'Week Warrior', description: '7-day habit streak', icon: '🔥', category: 'habits', rarity: 'uncommon' },
+  { id: 'habit_30', name: 'Monthly Master', description: '30-day habit streak', icon: '👑', category: 'habits', rarity: 'rare' },
+  { id: 'streak_3', name: 'Getting Started', description: '3-day app streak', icon: '✨', category: 'streaks', rarity: 'common' },
+  { id: 'streak_7', name: 'Week Strong', description: '7-day app streak', icon: '💪', category: 'streaks', rarity: 'uncommon' },
+  { id: 'streak_30', name: 'Consistency King', description: '30-day app streak', icon: '👑', category: 'streaks', rarity: 'epic' },
+  { id: 'wellness_1', name: 'Self Care', description: 'First mood check-in', icon: '💚', category: 'wellness', rarity: 'common' },
+  { id: 'breathing_10', name: 'Zen Master', description: '10 breathing exercises', icon: '🧘', category: 'wellness', rarity: 'uncommon' },
 ];
 
 // Level thresholds to calculate XP for each level
@@ -39,6 +47,8 @@ const getXPForLevel = (level: number): number => {
 export default function AnalyticsScreen() {
   // Only select raw data to avoid selector issues
   const progress = useProgressStore((state) => state.progress);
+  const userBadges = useProgressStore((state) => state.userBadges);
+  const xpEvents = useProgressStore((state) => state.xpEvents);
   const tasks = useTaskStore((state) => state.tasks);
   const habits = useHabitStore((state) => state.habits);
   const sessions = useFocusStore((state) => state.sessions);
@@ -82,10 +92,21 @@ export default function AnalyticsScreen() {
   const completedTasks = tasks.filter((t) => t.status === 'done').length;
   const activeHabits = habits.filter((h) => !h.archivedAt).length;
   
-  // Mock earned badges based on progress
-  const earnedBadgeIds = progress?.tasksCompleted && progress.tasksCompleted > 0 ? ['1'] : [];
-  if (progress?.focusMinutes && progress.focusMinutes >= 60) earnedBadgeIds.push('5');
-  if (progress?.currentStreak && progress.currentStreak >= 7) earnedBadgeIds.push('3');
+  // Get earned badge IDs from progress store
+  const earnedBadgeIds = useMemo(() => {
+    return userBadges?.map(b => b.badgeId) || [];
+  }, [userBadges]);
+
+  // Transform XP events to XPHistory format
+  const historyEvents: XPEvent[] = useMemo(() => {
+    return xpEvents.slice(0, 20).map((event) => ({
+      id: event.id,
+      amount: event.amount,
+      source: event.source as XPEvent['source'],
+      description: event.description,
+      timestamp: new Date(event.timestamp),
+    }));
+  }, [xpEvents]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -159,6 +180,9 @@ export default function AnalyticsScreen() {
             <Text style={styles.statLabel}>Badges</Text>
           </View>
         </View>
+
+        {/* XP History - Daily Goals & Recent Activity */}
+        <XPHistory events={historyEvents} />
 
         {/* Weekly Summary */}
         <View style={styles.summaryCard}>

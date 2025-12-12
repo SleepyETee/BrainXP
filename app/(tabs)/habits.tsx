@@ -6,10 +6,20 @@ import {
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
+  AccessibilityInfo,
 } from 'react-native';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { useHabitStore } from '../../src/stores/habitStore';
 import { useProgressStore } from '../../src/stores/progressStore';
+import { useSettingsStore } from '../../src/stores/settingsStore';
 import { colors } from '../../src/theme/colors';
 import { getShortDayNames } from '../../src/utils/date';
 import { HabitWithLogs } from '../../src/types/habit';
@@ -24,14 +34,129 @@ const getDateInfo = () => {
   };
 };
 
+// Streak visualization component
+const StreakBadge: React.FC<{
+  completed: number;
+  total: number;
+  percentage: number;
+  reduceMotion: boolean;
+}> = ({ completed, total, percentage, reduceMotion }) => {
+  const scale = useSharedValue(1);
+  
+  const getStreakColor = () => {
+    if (percentage >= 80) return colors.success[500];
+    if (percentage >= 50) return colors.warning[500];
+    return colors.gray[400];
+  };
+
+  const getStreakEmoji = () => {
+    if (percentage >= 80) return '🔥';
+    if (percentage >= 50) return '⭐';
+    return '💪';
+  };
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View 
+      style={[styles.streakBadge, !reduceMotion && animatedStyle]}
+      accessibilityLabel={`${completed} out of ${total} days completed, ${percentage}% success rate`}
+    >
+      <Text style={styles.streakEmoji}>{getStreakEmoji()}</Text>
+      <View style={styles.streakInfo}>
+        <Text style={[styles.streakText, { color: getStreakColor() }]}>
+          {completed}/{total}
+        </Text>
+        <Text style={styles.streakLabel}>days</Text>
+      </View>
+      <View style={[styles.streakProgress, { backgroundColor: colors.gray[200] }]}>
+        <View 
+          style={[
+            styles.streakProgressBar, 
+            { width: `${percentage}%`, backgroundColor: getStreakColor() }
+          ]} 
+        />
+      </View>
+    </Animated.View>
+  );
+};
+
+// Weekly calendar view
+const WeeklyCalendar: React.FC<{
+  habit: HabitWithLogs;
+  logs: any[];
+}> = ({ habit, logs }) => {
+  const today = new Date();
+  const weekDays = [];
+  
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+    const dateStr = date.toISOString().split('T')[0];
+    const log = logs.find(l => l.date === dateStr);
+    const isToday = i === 0;
+    const isScheduled = habit.daysOfWeek.includes(date.getDay());
+    
+    weekDays.push({
+      date,
+      dateStr,
+      dayName: getShortDayNames()[date.getDay()],
+      isCompleted: log?.completed || false,
+      isToday,
+      isScheduled,
+    });
+  }
+
+  return (
+    <View 
+      style={styles.weeklyCalendar}
+      accessible
+      accessibilityLabel="Weekly habit completion"
+    >
+      {weekDays.map((day, index) => (
+        <View 
+          key={day.dateStr} 
+          style={[
+            styles.calendarDay,
+            day.isToday && styles.calendarDayToday,
+          ]}
+          accessibilityLabel={`${day.dayName}: ${day.isCompleted ? 'completed' : day.isScheduled ? 'not completed' : 'not scheduled'}`}
+        >
+          <Text style={[
+            styles.calendarDayName,
+            day.isToday && styles.calendarDayNameToday,
+          ]}>
+            {day.dayName}
+          </Text>
+          <View style={[
+            styles.calendarDot,
+            day.isCompleted && styles.calendarDotCompleted,
+            !day.isScheduled && styles.calendarDotNotScheduled,
+            day.isToday && styles.calendarDotToday,
+          ]}>
+            {day.isCompleted && <Text style={styles.calendarCheck}>✓</Text>}
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+};
+
 export default function HabitsScreen() {
   const router = useRouter();
+
+  // Accessibility settings
+  const reduceMotion = useSettingsStore((state) => state.settings.reduceMotion);
+  const hapticFeedback = useSettingsStore((state) => state.settings.hapticFeedback);
+  const largeText = useSettingsStore((state) => state.settings.largeText);
 
   // Use ref for stable date values that don't cause re-renders
   const dateInfoRef = useRef(getDateInfo());
   const { todayStr, dayOfWeek } = dateInfoRef.current;
 
-  // Select raw data from stores - use getState() for initial values to avoid subscription loops
+  // Select raw data from stores
   const habitsData = useHabitStore((state) => state.habits);
   const logsData = useHabitStore((state) => state.logs);
 
@@ -64,7 +189,7 @@ export default function HabitsScreen() {
       });
   }, [habitsData, logsData, dayOfWeek, todayStr]);
 
-  // Calculate flexible streak locally - memoize per habit
+  // Calculate flexible streak locally
   const getFlexibleStreak = useCallback((habitId: string, windowDays = 14) => {
     if (!logsData) return { completed: 0, total: windowDays, percentage: 0, windowDays };
     
@@ -97,7 +222,22 @@ export default function HabitsScreen() {
     const todayLog = currentLogs.find((l) => l.habitId === habitId && l.date === todayStr);
     const isCompleted = todayLog?.completed;
 
-    // Use getState() to get action without selector subscription
+    // Haptic feedback
+    if (hapticFeedback) {
+      Haptics.impactAsync(
+        isCompleted 
+          ? Haptics.ImpactFeedbackStyle.Light 
+          : Haptics.ImpactFeedbackStyle.Medium
+      );
+    }
+
+    // Accessibility announcement
+    AccessibilityInfo.announceForAccessibility(
+      isCompleted 
+        ? `${habit.name} marked as incomplete` 
+        : `${habit.name} completed! Great job!`
+    );
+
     const result = await useHabitStore.getState().logHabit({
       habitId,
       date: todayStr,
@@ -105,18 +245,24 @@ export default function HabitsScreen() {
     });
 
     if (!isCompleted && result.xpEarned > 0) {
-      // Use getState() for addXP too to avoid subscription issues
       await useProgressStore.getState().addXP(result.xpEarned, 'habit_log', 'Logged a habit', habitId);
+      
+      if (hapticFeedback) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
     }
-  }, [todayStr]);
+  }, [todayStr, hapticFeedback]);
 
-  // Memoize computed stats to prevent recalculation on each render
+  // Memoize computed stats
   const { completedCount, totalCount, completionPercentage } = useMemo(() => {
     const completed = todayHabits.filter((h) => h.todayLog?.completed).length;
     const total = todayHabits.length;
     const percentage = total > 0 ? (completed / total) * 100 : 0;
     return { completedCount: completed, totalCount: total, completionPercentage: percentage };
   }, [todayHabits]);
+
+  // Dynamic text sizing
+  const textScale = largeText ? 1.15 : 1;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -126,24 +272,45 @@ export default function HabitsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Habits</Text>
+        <Animated.View 
+          style={styles.header}
+          entering={reduceMotion ? undefined : FadeIn.duration(300)}
+        >
+          <Text 
+            style={[styles.title, { fontSize: 28 * textScale }]} 
+            accessibilityRole="header"
+          >
+            Habits
+          </Text>
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => router.push('/habit/create')}
+            accessibilityRole="button"
+            accessibilityLabel="Create new habit"
           >
             <Text style={styles.addButtonText}>+ New</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         {/* Today's Progress */}
-        <View style={styles.progressCard}>
-          <Text style={styles.progressTitle}>Today's Progress</Text>
+        <Animated.View 
+          style={styles.progressCard}
+          entering={reduceMotion ? undefined : FadeInDown.delay(100).duration(300)}
+          accessible
+          accessibilityLabel={`Today's progress: ${completedCount} of ${totalCount} habits completed, ${Math.round(completionPercentage)}%`}
+        >
+          <Text style={[styles.progressTitle, { fontSize: 14 * textScale }]}>
+            Today's Progress
+          </Text>
           <View style={styles.progressRow}>
-            <Text style={styles.progressCount}>
+            <Text style={[styles.progressCount, { fontSize: 24 * textScale }]}>
               {completedCount}/{totalCount}
             </Text>
-            <View style={styles.progressBarContainer}>
+            <View 
+              style={styles.progressBarContainer}
+              accessibilityRole="progressbar"
+              accessibilityValue={{ min: 0, max: 100, now: Math.round(completionPercentage) }}
+            >
               <View
                 style={[
                   styles.progressBar,
@@ -151,111 +318,144 @@ export default function HabitsScreen() {
                 ]}
               />
             </View>
-            <Text style={styles.progressPercent}>
+            <Text style={[styles.progressPercent, { fontSize: 16 * textScale }]}>
               {Math.round(completionPercentage)}%
             </Text>
           </View>
           {completedCount === totalCount && totalCount > 0 && (
-            <Text style={styles.allDoneText}>
+            <Text style={[styles.allDoneText, { fontSize: 14 * textScale }]}>
               All habits completed! Great job! 🎉
             </Text>
           )}
-        </View>
+        </Animated.View>
 
         {/* Summary */}
         {summary && (
-          <View style={styles.summaryCard}>
+          <Animated.View 
+            style={styles.summaryCard}
+            entering={reduceMotion ? undefined : FadeInDown.delay(150).duration(300)}
+            accessible
+            accessibilityLabel={`Summary: ${summary.totalHabits} total habits, ${summary.completedToday} done today, longest streak ${summary.longestStreak} days, ${Math.round(summary.completionRate * 100)}% completion rate`}
+          >
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Habits</Text>
-              <Text style={styles.summaryValue}>{summary.totalHabits}</Text>
+              <Text style={[styles.summaryLabel, { fontSize: 12 * textScale }]}>Habits</Text>
+              <Text style={[styles.summaryValue, { fontSize: 18 * textScale }]}>{summary.totalHabits}</Text>
             </View>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Done Today</Text>
-              <Text style={styles.summaryValue}>{summary.completedToday}</Text>
+              <Text style={[styles.summaryLabel, { fontSize: 12 * textScale }]}>Done Today</Text>
+              <Text style={[styles.summaryValue, { fontSize: 18 * textScale }]}>{summary.completedToday}</Text>
             </View>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Longest Streak</Text>
-              <Text style={styles.summaryValue}>{summary.longestStreak}🔥</Text>
+              <Text style={[styles.summaryLabel, { fontSize: 12 * textScale }]}>Longest Streak</Text>
+              <Text style={[styles.summaryValue, { fontSize: 18 * textScale }]}>{summary.longestStreak}🔥</Text>
             </View>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Completion Rate</Text>
-              <Text style={styles.summaryValue}>
+              <Text style={[styles.summaryLabel, { fontSize: 12 * textScale }]}>Completion Rate</Text>
+              <Text style={[styles.summaryValue, { fontSize: 18 * textScale }]}>
                 {Math.round(summary.completionRate * 100)}%
               </Text>
             </View>
-          </View>
+          </Animated.View>
         )}
 
         {/* Today's Habits */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Today</Text>
+          <Text 
+            style={[styles.sectionTitle, { fontSize: 16 * textScale }]}
+            accessibilityRole="header"
+          >
+            Today
+          </Text>
           {todayHabits.length === 0 ? (
-            <View style={styles.emptyState}>
+            <View 
+              style={styles.emptyState}
+              accessible
+              accessibilityLabel="No habits scheduled for today. Create a habit to start building your routine."
+            >
               <Text style={styles.emptyEmoji}>🌱</Text>
-              <Text style={styles.emptyTitle}>No habits for today</Text>
-              <Text style={styles.emptyText}>
+              <Text style={[styles.emptyTitle, { fontSize: 18 * textScale }]}>No habits for today</Text>
+              <Text style={[styles.emptyText, { fontSize: 14 * textScale }]}>
                 Create a habit to start building your routine
               </Text>
               <TouchableOpacity
                 style={styles.createButton}
                 onPress={() => router.push('/habit/create')}
+                accessibilityRole="button"
+                accessibilityLabel="Create Habit"
               >
                 <Text style={styles.createButtonText}>Create Habit</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <View style={styles.habitsList}>
-              {todayHabits.map((habit) => {
+            <View style={styles.habitsList} accessibilityRole="list">
+              {todayHabits.map((habit, index) => {
                 const flexStreak = getFlexibleStreak(habit.id);
                 return (
-                  <TouchableOpacity
+                  <Animated.View
                     key={habit.id}
-                    style={[
-                      styles.habitCard,
-                      habit.todayLog?.completed && styles.habitCardCompleted,
-                    ]}
-                    onPress={() => handleHabitToggle(habit.id)}
-                    onLongPress={() => router.push(`/habit/${habit.id}`)}
+                    entering={reduceMotion ? undefined : FadeInDown.delay(200 + index * 50).duration(300)}
                   >
-                    <View style={styles.habitMain}>
-                      <View
-                        style={[
-                          styles.habitCheckbox,
-                          habit.todayLog?.completed && styles.habitCheckboxDone,
-                        ]}
-                      >
-                        {habit.todayLog?.completed && (
-                          <Text style={styles.habitCheck}>✓</Text>
-                        )}
-                      </View>
-                      <View style={styles.habitInfo}>
-                        <View style={styles.habitTitleRow}>
-                          <Text style={styles.habitIcon}>
-                            {habit.icon || '⭐'}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.habitName,
-                              habit.todayLog?.completed && styles.habitNameDone,
-                            ]}
-                          >
-                            {habit.name}
-                          </Text>
+                    <TouchableOpacity
+                      style={[
+                        styles.habitCard,
+                        habit.todayLog?.completed && styles.habitCardCompleted,
+                      ]}
+                      onPress={() => handleHabitToggle(habit.id)}
+                      onLongPress={() => router.push(`/habit/${habit.id}`)}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: habit.todayLog?.completed || false }}
+                      accessibilityLabel={`${habit.name}${habit.anchorDescription ? `, ${habit.anchorDescription}` : ''}`}
+                      accessibilityHint="Tap to toggle completion, long press to view details"
+                    >
+                      <View style={styles.habitMain}>
+                        <View
+                          style={[
+                            styles.habitCheckbox,
+                            habit.todayLog?.completed && styles.habitCheckboxDone,
+                          ]}
+                        >
+                          {habit.todayLog?.completed && (
+                            <Text style={styles.habitCheck}>✓</Text>
+                          )}
                         </View>
-                        {habit.anchorDescription && (
-                          <Text style={styles.habitAnchor} numberOfLines={1}>
-                            {habit.anchorDescription}
-                          </Text>
-                        )}
+                        <View style={styles.habitInfo}>
+                          <View style={styles.habitTitleRow}>
+                            <Text style={styles.habitIcon}>
+                              {habit.icon || '⭐'}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.habitName,
+                                { fontSize: 16 * textScale },
+                                habit.todayLog?.completed && styles.habitNameDone,
+                              ]}
+                            >
+                              {habit.name}
+                            </Text>
+                          </View>
+                          {habit.anchorDescription && (
+                            <Text 
+                              style={[styles.habitAnchor, { fontSize: 12 * textScale }]} 
+                              numberOfLines={1}
+                            >
+                              {habit.anchorDescription}
+                            </Text>
+                          )}
+                          {/* Weekly calendar for each habit */}
+                          <WeeklyCalendar 
+                            habit={habit} 
+                            logs={habit.logs || []} 
+                          />
+                        </View>
                       </View>
-                    </View>
-                    <View style={styles.habitStreak}>
-                      <Text style={styles.streakText}>
-                        {flexStreak.completed}/{flexStreak.total}
-                      </Text>
-                      <Text style={styles.streakLabel}>days</Text>
-                    </View>
-                  </TouchableOpacity>
+                      <StreakBadge 
+                        completed={flexStreak.completed}
+                        total={flexStreak.total}
+                        percentage={flexStreak.percentage}
+                        reduceMotion={reduceMotion}
+                      />
+                    </TouchableOpacity>
+                  </Animated.View>
                 );
               })}
             </View>
@@ -265,21 +465,28 @@ export default function HabitsScreen() {
         {/* All Habits */}
         {habits.length > todayHabits.length && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>All Habits</Text>
-            <View style={styles.habitsList}>
+            <Text 
+              style={[styles.sectionTitle, { fontSize: 16 * textScale }]}
+              accessibilityRole="header"
+            >
+              All Habits
+            </Text>
+            <View style={styles.habitsList} accessibilityRole="list">
               {habits
-                .filter(
-                  (h) => !h.daysOfWeek.includes(dayOfWeek)
-                )
+                .filter((h) => !h.daysOfWeek.includes(dayOfWeek))
                 .map((habit) => (
                   <TouchableOpacity
                     key={habit.id}
                     style={styles.habitCardInactive}
                     onPress={() => router.push(`/habit/${habit.id}`)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${habit.name}, scheduled for ${habit.daysOfWeek.map((d) => getShortDayNames()[d]).join(', ')}`}
                   >
                     <Text style={styles.habitIcon}>{habit.icon || '⭐'}</Text>
-                    <Text style={styles.habitNameInactive}>{habit.name}</Text>
-                    <Text style={styles.habitDays}>
+                    <Text style={[styles.habitNameInactive, { fontSize: 15 * textScale }]}>
+                      {habit.name}
+                    </Text>
+                    <Text style={[styles.habitDays, { fontSize: 12 * textScale }]}>
                       {habit.daysOfWeek.map((d) => getShortDayNames()[d]).join(', ')}
                     </Text>
                   </TouchableOpacity>
@@ -394,7 +601,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -409,7 +616,7 @@ const styles = StyleSheet.create({
   },
   habitMain: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flex: 1,
   },
   habitCheckbox: {
@@ -421,6 +628,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 2,
   },
   habitCheckboxDone: {
     backgroundColor: colors.success[500],
@@ -456,18 +664,88 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginLeft: 26,
   },
-  habitStreak: {
+  // New streak badge styles
+  streakBadge: {
     alignItems: 'center',
     marginLeft: 12,
+    minWidth: 60,
+  },
+  streakEmoji: {
+    fontSize: 16,
+    marginBottom: 2,
+  },
+  streakInfo: {
+    alignItems: 'center',
   },
   streakText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.gray[700],
+    fontSize: 14,
+    fontWeight: '700',
   },
   streakLabel: {
     fontSize: 10,
     color: colors.gray[400],
+  },
+  streakProgress: {
+    width: 40,
+    height: 3,
+    borderRadius: 2,
+    marginTop: 4,
+    overflow: 'hidden',
+  },
+  streakProgressBar: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  // Weekly calendar styles
+  weeklyCalendar: {
+    flexDirection: 'row',
+    marginTop: 8,
+    marginLeft: 26,
+    gap: 6,
+  },
+  calendarDay: {
+    alignItems: 'center',
+    padding: 4,
+    borderRadius: 6,
+  },
+  calendarDayToday: {
+    backgroundColor: colors.primary[50],
+  },
+  calendarDayName: {
+    fontSize: 9,
+    color: colors.gray[400],
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  calendarDayNameToday: {
+    color: colors.primary[600],
+    fontWeight: '700',
+  },
+  calendarDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.gray[200],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarDotCompleted: {
+    backgroundColor: colors.success[500],
+  },
+  calendarDotNotScheduled: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+    borderStyle: 'dashed',
+  },
+  calendarDotToday: {
+    borderWidth: 2,
+    borderColor: colors.primary[400],
+  },
+  calendarCheck: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   habitCardInactive: {
     backgroundColor: colors.gray[100],

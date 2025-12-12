@@ -6,6 +6,7 @@ import {
   StyleProp,
   TouchableOpacity,
   TouchableOpacityProps,
+  Pressable,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -28,6 +29,7 @@ interface CardProps {
   variant?: CardVariant;
   padding?: CardPadding;
   onPress?: () => void;
+  onLongPress?: () => void;
   style?: ViewStyle;
   disabled?: boolean;
   animated?: boolean;

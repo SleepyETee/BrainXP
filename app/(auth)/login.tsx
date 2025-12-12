@@ -178,13 +178,7 @@ export default function LoginScreen() {
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoComplete="email"
-                  leftIcon={
-                    <Ionicons
-                      name="mail-outline"
-                      size={20}
-                      color={colors.gray[400]}
-                    />
-                  }
+                  leftIcon="mail-outline"
                 />
               )}
             />
@@ -202,20 +196,8 @@ export default function LoginScreen() {
                   error={errors.password?.message}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
-                  leftIcon={
-                    <Ionicons
-                      name="lock-closed-outline"
-                      size={20}
-                      color={colors.gray[400]}
-                    />
-                  }
-                  rightIcon={
-                    <Ionicons
-                      name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                      size={20}
-                      color={colors.gray[400]}
-                    />
-                  }
+                  leftIcon="lock-closed-outline"
+                  rightIcon={showPassword ? 'eye-outline' : 'eye-off-outline'}
                   onRightIconPress={() => setShowPassword(!showPassword)}
                 />
               )}

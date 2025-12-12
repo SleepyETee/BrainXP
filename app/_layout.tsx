@@ -39,23 +39,8 @@ function RootLayoutContent() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(onboarding)" />
-        <Stack.Screen
-          name="task/create"
-          options={{
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
-          }}
-        />
-        <Stack.Screen name="task/[id]" />
-        <Stack.Screen
-          name="focus/setup"
-          options={{
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
-          }}
-        />
-        <Stack.Screen name="focus/active" />
-        <Stack.Screen name="focus/complete" />
+        <Stack.Screen name="task" />
+        <Stack.Screen name="focus" />
         <Stack.Screen
           name="inbox"
           options={{
@@ -63,28 +48,8 @@ function RootLayoutContent() {
             animation: 'slide_from_bottom',
           }}
         />
-        <Stack.Screen
-          name="habit/create"
-          options={{
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
-          }}
-        />
-        <Stack.Screen name="habit/[id]" />
-        <Stack.Screen
-          name="wellness/mood"
-          options={{
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
-          }}
-        />
-        <Stack.Screen
-          name="wellness/breathing"
-          options={{
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
-          }}
-        />
+        <Stack.Screen name="habit" />
+        <Stack.Screen name="wellness" />
         <Stack.Screen name="analytics" />
         <Stack.Screen
           name="planning"
@@ -97,6 +62,7 @@ function RootLayoutContent() {
         <Stack.Screen name="tools" />
         <Stack.Screen name="study" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="routine" />
       </Stack>
     </>
   );

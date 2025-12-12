@@ -1,160 +1,136 @@
-// filepath: /Users/sleepyet/BrainXP/src/components/ui/EmptyState.tsx
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
-import Animated, {
-  FadeIn,
-  FadeInDown,
-  FadeInUp,
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Button } from './Button';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ViewStyle,
+  Dimensions,
+} from 'react-native';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
+import { AnimatedButton } from './AnimatedButton';
+import { TOUCH_TARGETS } from '../../utils/uxHelpers';
 
-type EmptyStateVariant = 'default' | 'minimal' | 'illustrated' | 'celebration';
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface EmptyStateProps {
-  icon?: string;
+  // Content
+  emoji?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
   title: string;
-  message?: string;
-  variant?: EmptyStateVariant;
+  description?: string;
+  // Action
   actionLabel?: string;
   onAction?: () => void;
   secondaryActionLabel?: string;
   onSecondaryAction?: () => void;
+  // Appearance
+  variant?: 'default' | 'compact' | 'fullscreen';
+  illustration?: React.ReactNode;
   style?: ViewStyle;
-  animated?: boolean;
+  // Accessibility
+  accessibilityLabel?: string;
 }
 
+/**
+ * EmptyState Component
+ * 
+ * Displays helpful messaging when there's no content to show.
+ * Follows UX best practices:
+ * - Clear explanation of why it's empty
+ * - Actionable next step
+ * - Friendly, encouraging tone
+ */
 export const EmptyState: React.FC<EmptyStateProps> = ({
+  emoji,
   icon,
   title,
-  message,
-  variant = 'default',
+  description,
   actionLabel,
   onAction,
   secondaryActionLabel,
   onSecondaryAction,
+  variant = 'default',
+  illustration,
   style,
-  animated = true,
+  accessibilityLabel,
 }) => {
-  const floatY = useSharedValue(0);
-
-  React.useEffect(() => {
-    if (animated && variant !== 'minimal') {
-      floatY.value = withRepeat(
-        withSequence(
-          withTiming(-8, { duration: 1500 }),
-          withTiming(0, { duration: 1500 })
-        ),
-        -1,
-        true
-      );
-    }
-  }, [animated, variant]);
-
-  const floatingStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: floatY.value }],
-  }));
+  const isCompact = variant === 'compact';
+  const isFullscreen = variant === 'fullscreen';
 
   const containerStyles = [
     styles.container,
-    styles[`variant_${variant}` as keyof typeof styles],
+    isCompact && styles.containerCompact,
+    isFullscreen && styles.containerFullscreen,
     style,
   ];
 
-  const renderIcon = () => {
-    if (!icon) return null;
-
-    if (variant === 'illustrated') {
-      return (
-        <Animated.View
-          entering={animated ? FadeInDown.delay(100).springify() : undefined}
-          style={[styles.illustratedIconContainer, floatingStyle]}
-        >
-          <LinearGradient
-            colors={[colors.primary[100], colors.primary[50]]}
-            style={styles.illustratedIconBg}
-          >
-            <Text style={styles.illustratedIcon}>{icon}</Text>
-          </LinearGradient>
-        </Animated.View>
-      );
-    }
-
-    if (variant === 'celebration') {
-      return (
-        <Animated.View
-          entering={animated ? FadeIn.delay(100).springify() : undefined}
-          style={[styles.celebrationIconContainer, floatingStyle]}
-        >
-          <Text style={styles.celebrationIcon}>{icon}</Text>
-          <View style={styles.sparkles}>
-            <Text style={styles.sparkle}>✨</Text>
-            <Text style={[styles.sparkle, styles.sparkleRight]}>✨</Text>
-          </View>
-        </Animated.View>
-      );
-    }
-
-    return (
-      <Animated.View
-        entering={animated ? FadeIn.delay(100) : undefined}
-        style={styles.iconContainer}
-      >
-        <Text style={styles.icon}>{icon}</Text>
-      </Animated.View>
-    );
-  };
-
   return (
-    <View style={containerStyles}>
-      {renderIcon()}
-
-      <Animated.Text
-        entering={animated ? FadeInUp.delay(200) : undefined}
-        style={[
-          styles.title,
-          variant === 'minimal' && styles.titleMinimal,
-          variant === 'celebration' && styles.titleCelebration,
-        ]}
+    <View 
+      style={containerStyles}
+      accessible
+      accessibilityLabel={accessibilityLabel || `${title}. ${description || ''}`}
+      accessibilityRole="text"
+    >
+      {/* Illustration or Icon */}
+      <Animated.View 
+        entering={FadeInDown.delay(100).springify()}
+        style={styles.illustrationContainer}
       >
-        {title}
-      </Animated.Text>
+        {illustration ? (
+          illustration
+        ) : emoji ? (
+          <View style={[styles.emojiContainer, isCompact && styles.emojiContainerCompact]}>
+            <Text style={[styles.emoji, isCompact && styles.emojiCompact]}>{emoji}</Text>
+          </View>
+        ) : icon ? (
+          <View style={[styles.iconContainer, isCompact && styles.iconContainerCompact]}>
+            <Ionicons 
+              name={icon} 
+              size={isCompact ? 32 : 48} 
+              color={colors.gray[400]} 
+            />
+          </View>
+        ) : null}
+      </Animated.View>
 
-      {message && (
-        <Animated.Text
-          entering={animated ? FadeInUp.delay(300) : undefined}
-          style={[styles.message, variant === 'minimal' && styles.messageMinimal]}
-        >
-          {message}
-        </Animated.Text>
-      )}
+      {/* Text Content */}
+      <Animated.View 
+        entering={FadeInDown.delay(200).springify()}
+        style={styles.textContainer}
+      >
+        <Text style={[styles.title, isCompact && styles.titleCompact]}>
+          {title}
+        </Text>
+        {description && (
+          <Text style={[styles.description, isCompact && styles.descriptionCompact]}>
+            {description}
+          </Text>
+        )}
+      </Animated.View>
 
+      {/* Actions */}
       {(actionLabel || secondaryActionLabel) && (
-        <Animated.View
-          entering={animated ? FadeInUp.delay(400) : undefined}
-          style={styles.actions}
+        <Animated.View 
+          entering={FadeInUp.delay(300).springify()}
+          style={[styles.actionsContainer, isCompact && styles.actionsContainerCompact]}
         >
           {actionLabel && onAction && (
-            <Button
+            <AnimatedButton
               title={actionLabel}
               onPress={onAction}
               variant="primary"
-              size="md"
-              gradient
+              size={isCompact ? 'sm' : 'md'}
+              style={styles.primaryAction}
             />
           )}
           {secondaryActionLabel && onSecondaryAction && (
-            <Button
+            <AnimatedButton
               title={secondaryActionLabel}
               onPress={onSecondaryAction}
               variant="ghost"
-              size="md"
+              size={isCompact ? 'sm' : 'md'}
             />
           )}
         </Animated.View>
@@ -163,99 +139,61 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   );
 };
 
-// Preset empty states for common scenarios
-interface PresetEmptyStateProps {
-  onAction?: () => void;
-  style?: ViewStyle;
-}
+/**
+ * Pre-built empty states for common scenarios
+ */
 
-export const NoTasksEmptyState: React.FC<PresetEmptyStateProps> = ({ onAction, style }) => (
+export const NoTasksEmptyState: React.FC<{ onAddTask?: () => void }> = ({ onAddTask }) => (
   <EmptyState
-    icon="📋"
-    title="No tasks yet"
-    message="Add your first task to get started on your productivity journey!"
-    actionLabel="+ Add Task"
-    onAction={onAction}
-    variant="illustrated"
-    style={style}
-  />
-);
-
-export const NoHabitsEmptyState: React.FC<PresetEmptyStateProps> = ({ onAction, style }) => (
-  <EmptyState
-    icon="🌱"
-    title="Start a new habit"
-    message="Build routines that stick. Small steps lead to big changes!"
-    actionLabel="+ Create Habit"
-    onAction={onAction}
-    variant="illustrated"
-    style={style}
-  />
-);
-
-export const AllDoneEmptyState: React.FC<PresetEmptyStateProps> = ({ onAction, style }) => (
-  <EmptyState
-    icon="🎉"
+    emoji="✨"
     title="All caught up!"
-    message="Amazing work! You've completed everything. Take a well-deserved break."
-    variant="celebration"
-    actionLabel="View Analytics"
-    onAction={onAction}
-    style={style}
+    description="You have no tasks right now. Enjoy the moment or add something new."
+    actionLabel="+ Add Task"
+    onAction={onAddTask}
   />
 );
 
-export const NoSearchResultsEmptyState: React.FC<{ query?: string; style?: ViewStyle }> = ({
-  query,
-  style,
+export const NoHabitsEmptyState: React.FC<{ onAddHabit?: () => void }> = ({ onAddHabit }) => (
+  <EmptyState
+    emoji="🌱"
+    title="Start building habits"
+    description="Small daily actions lead to big changes. Create your first habit to get started."
+    actionLabel="+ Create Habit"
+    onAction={onAddHabit}
+  />
+);
+
+export const NoSearchResultsEmptyState: React.FC<{ query?: string; onClear?: () => void }> = ({ 
+  query, 
+  onClear 
 }) => (
   <EmptyState
-    icon="🔍"
+    icon="search-outline"
     title="No results found"
-    message={query ? `We couldn't find anything matching "${query}"` : 'Try a different search term'}
-    variant="minimal"
-    style={style}
+    description={query ? `We couldn't find anything matching "${query}"` : 'Try adjusting your search terms'}
+    actionLabel="Clear Search"
+    onAction={onClear}
+    variant="compact"
   />
 );
 
-export const ErrorEmptyState: React.FC<PresetEmptyStateProps & { message?: string }> = ({
-  onAction,
-  message,
-  style,
-}) => (
+export const ErrorEmptyState: React.FC<{ onRetry?: () => void }> = ({ onRetry }) => (
   <EmptyState
-    icon="😕"
+    emoji="😅"
     title="Something went wrong"
-    message={message || "We're having trouble loading this. Please try again."}
-    actionLabel="Try Again"
-    onAction={onAction}
-    variant="default"
-    style={style}
-  />
-);
-
-export const OfflineEmptyState: React.FC<PresetEmptyStateProps> = ({ onAction, style }) => (
-  <EmptyState
-    icon="📡"
-    title="You're offline"
-    message="Check your internet connection and try again."
+    description="We had trouble loading this. Please try again."
     actionLabel="Retry"
-    onAction={onAction}
-    variant="default"
-    style={style}
+    onAction={onRetry}
   />
 );
 
-export const ComingSoonEmptyState: React.FC<{ feature?: string; style?: ViewStyle }> = ({
-  feature,
-  style,
-}) => (
+export const OfflineEmptyState: React.FC<{ onRetry?: () => void }> = ({ onRetry }) => (
   <EmptyState
-    icon="🚀"
-    title="Coming Soon!"
-    message={feature ? `${feature} is on its way. Stay tuned!` : "We're working on something awesome!"}
-    variant="illustrated"
-    style={style}
+    icon="cloud-offline-outline"
+    title="You're offline"
+    description="Check your connection and try again."
+    actionLabel="Retry"
+    onAction={onRetry}
   />
 );
 
@@ -263,97 +201,88 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 32,
-  },
-  variant_default: {},
-  variant_minimal: {
-    padding: 24,
-  },
-  variant_illustrated: {
     paddingVertical: 48,
+    paddingHorizontal: 32,
   },
-  variant_celebration: {
-    paddingVertical: 48,
+  containerCompact: {
+    paddingVertical: 24,
+    paddingHorizontal: 20,
   },
-
-  // Icon styles
-  iconContainer: {
+  containerFullscreen: {
+    flex: 1,
+    paddingVertical: 0,
+  },
+  illustrationContainer: {
     marginBottom: 20,
   },
-  icon: {
-    fontSize: 56,
-  },
-  illustratedIconContainer: {
-    marginBottom: 28,
-  },
-  illustratedIconBg: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+  emojiContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.gray[100],
     alignItems: 'center',
     justifyContent: 'center',
   },
-  illustratedIcon: {
-    fontSize: 48,
+  emojiContainerCompact: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
-  celebrationIconContainer: {
-    marginBottom: 24,
-    position: 'relative',
+  emoji: {
+    fontSize: 40,
   },
-  celebrationIcon: {
-    fontSize: 72,
+  emojiCompact: {
+    fontSize: 28,
   },
-  sparkles: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.gray[100],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  sparkle: {
-    position: 'absolute',
-    fontSize: 20,
-    top: -10,
-    left: -15,
+  iconContainerCompact: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
-  sparkleRight: {
-    left: 'auto',
-    right: -15,
-    top: 5,
+  textContainer: {
+    alignItems: 'center',
+    maxWidth: SCREEN_WIDTH * 0.8,
   },
-
-  // Text styles
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
-    color: colors.gray[800],
+    color: colors.gray[900],
     textAlign: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
-  titleMinimal: {
-    fontSize: 18,
+  titleCompact: {
+    fontSize: 16,
+    marginBottom: 4,
   },
-  titleCelebration: {
-    fontSize: 26,
-    color: colors.primary[600],
-  },
-  message: {
+  description: {
     fontSize: 15,
     color: colors.gray[500],
     textAlign: 'center',
     lineHeight: 22,
-    maxWidth: 280,
   },
-  messageMinimal: {
-    fontSize: 14,
-    maxWidth: 240,
+  descriptionCompact: {
+    fontSize: 13,
+    lineHeight: 18,
   },
-
-  // Actions
-  actions: {
-    marginTop: 28,
-    gap: 12,
+  actionsContainer: {
+    marginTop: 24,
     alignItems: 'center',
+    gap: 12,
+  },
+  actionsContainerCompact: {
+    marginTop: 16,
+    gap: 8,
+  },
+  primaryAction: {
+    minWidth: 160,
   },
 });
 

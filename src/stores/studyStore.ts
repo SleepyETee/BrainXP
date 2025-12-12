@@ -28,7 +28,6 @@ interface StudyState {
   quizzes: Quiz[];
   quizAttempts: QuizAttempt[];
   flashcards: Record<string, Flashcard[]>;
-  flashcards: Record<string, Flashcard[]>;
   stats: StudyStats | null;
   activeSession: StudySession | null;
   sessionCards: Flashcard[];
@@ -36,7 +35,7 @@ interface StudyState {
   isLoading: boolean;
   
   // Study Set Actions
-  createStudySet: (title: string, description?: string) => StudySet;
+  createStudySet: (input: CreateStudySetInput) => StudySet;
   updateStudySet: (id: string, updates: Partial<StudySet>) => void;
   deleteStudySet: (id: string) => void;
   fetchStudySets: () => Promise<void>;
@@ -121,8 +120,10 @@ export const useStudyStore = create<StudyState>()(
         const studySet: StudySet = {
           id: generateId(),
           userId: '1',
-          title,
-          description,
+          title: input.title,
+          description: input.description,
+          icon: input.icon,
+          color: input.color,
           isPublic: false,
           isFavorite: false,
           aiGenerated: false,

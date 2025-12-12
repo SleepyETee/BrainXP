@@ -553,4 +553,219 @@ ADHD-friendly principles:
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// FLASHCARD GENERATOR
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const generateFlashcardsSchema = z.object({
+  body: z.object({
+    content: z.string().min(1).max(10000),
+    cardCount: z.number().min(1).max(30).optional().default(10),
+    includeExplanations: z.boolean().optional().default(true),
+    focusAreas: z.array(z.string()).optional(),
+    difficulty: z.enum(['easy', 'medium', 'hard']).optional().default('medium'),
+  }),
+});
+
+router.post('/generate-flashcards', authMiddleware, validate(generateFlashcardsSchema), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { content, cardCount, includeExplanations, focusAreas, difficulty } = req.body;
+
+    const difficultyGuide: Record<string, string> = {
+      easy: 'Focus on basic definitions, simple concepts, and straightforward recall',
+      medium: 'Include application questions, connections between concepts, and moderate complexity',
+      hard: 'Include analysis, synthesis, edge cases, and nuanced understanding',
+    };
+
+    const prompt = `Generate ${cardCount} high-quality flashcards from this content for studying.
+
+Content:
+"""
+${content}
+"""
+
+${focusAreas?.length ? `Focus areas: ${focusAreas.join(', ')}` : ''}
+Difficulty: ${difficulty} (${difficultyGuide[difficulty || 'medium']})
+${includeExplanations ? 'Include explanations for each answer.' : ''}
+
+Create flashcards that:
+- Cover the most important concepts
+- Are ADHD-friendly (clear, concise, not overwhelming)
+- Use varied question types (definitions, applications, comparisons)
+- Progress from fundamental to more complex concepts
+
+Provide a JSON response:
+{
+  "flashcards": [
+    {
+      "id": "card_1",
+      "front": "Clear, specific question or prompt",
+      "back": "Concise, accurate answer",
+      "explanation": "Optional deeper explanation (only if includeExplanations is true)",
+      "difficulty": "easy" | "medium" | "hard",
+      "tags": ["relevant", "topic", "tags"],
+      "hint": "Optional helpful hint"
+    }
+  ],
+  "metadata": {
+    "totalCards": number,
+    "topicsCount": number,
+    "topics": ["List of main topics covered"],
+    "estimatedStudyTime": number (minutes for one review session),
+    "difficulty": "${difficulty}"
+  },
+  "studyTips": ["2-3 ADHD-friendly study tips for these flashcards"]
+}`;
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4096,
+      system: AI_TOOLS_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const fallbackResult = {
+      flashcards: [
+        {
+          id: 'card_1',
+          front: 'What are the key concepts from this content?',
+          back: 'Unable to generate specific flashcards. Please try again.',
+          difficulty: 'medium',
+          tags: ['general'],
+        },
+      ],
+      metadata: {
+        totalCards: 1,
+        topicsCount: 1,
+        topics: ['General'],
+        estimatedStudyTime: 5,
+        difficulty: difficulty || 'medium',
+      },
+      studyTips: [
+        'Review cards in short 10-15 minute sessions',
+        'Use spaced repetition for better retention',
+        'Take breaks between study sessions',
+      ],
+    };
+
+    const textContent = findTextContent(message);
+    const result = parseJsonFromText(textContent?.text, fallbackResult);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Error generating flashcards:', error);
+    res.status(500).json({ success: false, message: 'Failed to generate flashcards' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// QUIZ GENERATOR
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const generateQuizSchema = z.object({
+  body: z.object({
+    content: z.string().min(1).max(10000),
+    questionCount: z.number().min(1).max(20).optional().default(10),
+    questionTypes: z.array(z.enum(['multiple_choice', 'true_false', 'short_answer'])).optional(),
+    difficulty: z.enum(['easy', 'medium', 'hard']).optional().default('medium'),
+    includeExplanations: z.boolean().optional().default(true),
+  }),
+});
+
+router.post('/generate-quiz', authMiddleware, validate(generateQuizSchema), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { content, questionCount, questionTypes, difficulty, includeExplanations } = req.body;
+
+    const types = questionTypes?.length ? questionTypes : ['multiple_choice'];
+    const difficultyGuide: Record<string, string> = {
+      easy: 'Basic recall, straightforward questions, obvious correct answers',
+      medium: 'Application-based, requires understanding, plausible distractors',
+      hard: 'Analysis and synthesis, tricky distractors, nuanced understanding required',
+    };
+
+    const prompt = `Generate a ${questionCount}-question quiz from this content.
+
+Content:
+"""
+${content}
+"""
+
+Question types: ${types.join(', ')}
+Difficulty: ${difficulty} (${difficultyGuide[difficulty || 'medium']})
+${includeExplanations ? 'Include explanations for each correct answer.' : ''}
+
+Create quiz questions that:
+- Test understanding, not just memorization
+- Have clear, unambiguous correct answers
+- Include plausible but clearly incorrect distractors for multiple choice
+- Are ADHD-friendly (concise, clear formatting)
+- Cover the most important concepts
+
+Provide a JSON response:
+{
+  "questions": [
+    {
+      "id": "q_1",
+      "type": "multiple_choice" | "true_false" | "short_answer",
+      "question": "Clear, well-formatted question",
+      "options": ["Option A", "Option B", "Option C", "Option D"] (only for multiple_choice, 4 options),
+      "correctIndex": 0 (index of correct option for multiple_choice, 0 or 1 for true_false),
+      "correctAnswer": "The correct answer text (for all types)",
+      "explanation": "Why this is correct and why other options are wrong",
+      "difficulty": "easy" | "medium" | "hard",
+      "topic": "The topic this question covers",
+      "hint": "Optional helpful hint"
+    }
+  ],
+  "metadata": {
+    "totalQuestions": number,
+    "byDifficulty": { "easy": number, "medium": number, "hard": number },
+    "byType": { "multiple_choice": number, "true_false": number, "short_answer": number },
+    "topics": ["List of topics covered"],
+    "estimatedTime": number (minutes to complete),
+    "passingScore": number (recommended percentage to pass)
+  },
+  "instructions": "Brief ADHD-friendly instructions for taking the quiz"
+}`;
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4096,
+      system: AI_TOOLS_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const fallbackResult = {
+      questions: [
+        {
+          id: 'q_1',
+          type: 'multiple_choice',
+          question: 'What is the main concept from this content?',
+          options: ['Unable to generate', 'Please try again', 'Check your content', 'Retry'],
+          correctIndex: 0,
+          correctAnswer: 'Unable to generate',
+          explanation: 'Unable to generate quiz questions. Please try again with different content.',
+          difficulty: 'medium',
+          topic: 'General',
+        },
+      ],
+      metadata: {
+        totalQuestions: 1,
+        byDifficulty: { easy: 0, medium: 1, hard: 0 },
+        byType: { multiple_choice: 1, true_false: 0, short_answer: 0 },
+        topics: ['General'],
+        estimatedTime: 5,
+        passingScore: 70,
+      },
+      instructions: 'Read each question carefully and select the best answer.',
+    };
+
+    const textContent = findTextContent(message);
+    const result = parseJsonFromText(textContent?.text, fallbackResult);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Error generating quiz:', error);
+    res.status(500).json({ success: false, message: 'Failed to generate quiz' });
+  }
+});
+
 export default router;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { SpoonEstimate, EstimateSpoonInput } from '../../types/aiTools';
 import { colors, shadows } from '../../theme/colors';
 import { springConfigs } from '../../utils/animations';
 import { estimateSpoons } from '../../services/api/aiTools';
+import { useMLStore } from '../../stores/mlStore';
 
 interface SpoonEstimatorProps {
   initialTask?: string;
@@ -29,6 +30,13 @@ const ENERGY_LEVELS: { level: number; label: string; emoji: string; color: strin
   { level: 5, label: 'Great', emoji: '😄', color: colors.primary[500] },
 ];
 
+const TIME_OF_DAY_OPTIONS = [
+  { value: 'morning' as const, label: 'Morning', emoji: '🌅' },
+  { value: 'afternoon' as const, label: 'Afternoon', emoji: '☀️' },
+  { value: 'evening' as const, label: 'Evening', emoji: '🌆' },
+  { value: 'night' as const, label: 'Night', emoji: '🌙' },
+];
+
 export const SpoonEstimator: React.FC<SpoonEstimatorProps> = ({
   initialTask = '',
   onEstimateComplete,
@@ -37,9 +45,29 @@ export const SpoonEstimator: React.FC<SpoonEstimatorProps> = ({
   const [taskTitle, setTaskTitle] = useState(initialTask);
   const [taskDescription, setTaskDescription] = useState('');
   const [currentEnergy, setCurrentEnergy] = useState<number | undefined>(undefined);
+  const [timeOfDay, setTimeOfDay] = useState<'morning' | 'afternoon' | 'evening' | 'night' | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [estimate, setEstimate] = useState<SpoonEstimate | null>(null);
+  const [mlPrediction, setMlPrediction] = useState<Awaited<ReturnType<typeof useMLStore.getState().predictSpoons>> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [feedbackGiven, setFeedbackGiven] = useState(false);
+  const [toolUsageId, setToolUsageId] = useState<string | null>(null);
+
+  const { predictSpoons: mlPredictSpoons, submitFeedback, patterns, fetchPatterns } = useMLStore();
+
+  // Auto-detect time of day
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) setTimeOfDay('morning');
+    else if (hour >= 12 && hour < 17) setTimeOfDay('afternoon');
+    else if (hour >= 17 && hour < 21) setTimeOfDay('evening');
+    else setTimeOfDay('night');
+  }, []);
+
+  // Fetch user patterns on mount for insights
+  useEffect(() => {
+    fetchPatterns().catch(() => {});
+  }, []);
 
   const handleEstimate = async () => {
     if (!taskTitle.trim()) {
@@ -51,23 +79,70 @@ export const SpoonEstimator: React.FC<SpoonEstimatorProps> = ({
     setError(null);
 
     try {
-      const input: EstimateSpoonInput = {
-        task: taskTitle.trim(),
-        taskTitle: taskTitle.trim(),
-        taskDescription: taskDescription.trim() || undefined,
-        currentEnergy,
-      };
+      // Run both standard and ML predictions in parallel
+      const [standardResult, mlResult] = await Promise.all([
+        estimateSpoons({
+          task: taskTitle.trim(),
+          taskTitle: taskTitle.trim(),
+          taskDescription: taskDescription.trim() || undefined,
+          currentEnergy,
+        }),
+        mlPredictSpoons(
+          taskTitle.trim(),
+          taskDescription.trim() || undefined,
+          currentEnergy,
+          timeOfDay
+        ).catch(() => null),
+      ]);
 
-      const result = await estimateSpoons(input);
-      setEstimate(result);
+      // Generate a usage ID for feedback tracking
+      const usageId = `spoon-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      setToolUsageId(usageId);
+
+      // Merge ML insights into the estimate
+      if (mlResult && mlResult.isPersonalized) {
+        standardResult.mlEnhanced = true;
+        standardResult.confidence = mlResult.confidence;
+        standardResult.basedOnHistory = mlResult.basedOnSimilarTasks;
+        
+        // Add ML-specific tips
+        if (mlResult.personalizedTips && mlResult.personalizedTips.length > 0) {
+          standardResult.suggestions = [
+            ...(standardResult.suggestions || []),
+            ...mlResult.personalizedTips,
+          ];
+        }
+        
+        // Add adjustment factors as additional context
+        if (mlResult.adjustmentFactors && mlResult.adjustmentFactors.length > 0) {
+          standardResult.mlAdjustments = mlResult.adjustmentFactors;
+        }
+      }
+
+      setEstimate(standardResult);
+      setMlPrediction(mlResult);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      onEstimateComplete?.(result);
+      onEstimateComplete?.(standardResult);
     } catch (err) {
       setError('Failed to estimate. Please try again.');
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleFeedback = async (wasHelpful: boolean, actualSpoons?: number) => {
+    if (!toolUsageId || feedbackGiven) return;
+
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFeedbackGiven(true);
+
+    await submitFeedback(
+      toolUsageId,
+      wasHelpful,
+      undefined,
+      actualSpoons !== undefined ? { actualSpoons } : undefined
+    );
   };
 
   const getSpoonColor = (spoons: number) => {
@@ -114,6 +189,128 @@ export const SpoonEstimator: React.FC<SpoonEstimatorProps> = ({
     return 'LOW';
   };
 
+  const renderMLBadge = () => {
+    if (!mlPrediction?.isPersonalized) return null;
+
+    return (
+      <Animated.View entering={FadeIn} style={styles.mlBadge}>
+        <Text style={styles.mlBadgeIcon}>🧠</Text>
+        <Text style={styles.mlBadgeText}>
+          Personalized • Based on {mlPrediction.basedOnSimilarTasks} similar tasks
+        </Text>
+      </Animated.View>
+    );
+  };
+
+  const renderConfidenceIndicator = () => {
+    if (!mlPrediction) return null;
+
+    const confidence = mlPrediction.confidence;
+    const confidencePercent = Math.round(confidence * 100);
+    const confidenceColor = confidence >= 0.7 
+      ? colors.success[500] 
+      : confidence >= 0.4 
+        ? colors.warning[500] 
+        : colors.gray[400];
+
+    return (
+      <View style={styles.confidenceContainer}>
+        <Text style={styles.confidenceLabel}>Confidence</Text>
+        <View style={styles.confidenceBar}>
+          <View 
+            style={[
+              styles.confidenceFill, 
+              { width: `${confidencePercent}%`, backgroundColor: confidenceColor }
+            ]} 
+          />
+        </View>
+        <Text style={[styles.confidenceText, { color: confidenceColor }]}>
+          {confidencePercent}%
+        </Text>
+      </View>
+    );
+  };
+
+  const renderMLAdjustments = () => {
+    if (!mlPrediction?.adjustmentFactors || mlPrediction.adjustmentFactors.length === 0) return null;
+
+    return (
+      <Animated.View entering={FadeInDown.delay(200)} style={styles.adjustmentsCard}>
+        <Text style={styles.adjustmentsTitle}>🎯 Personalized Adjustments</Text>
+        {mlPrediction.adjustmentFactors.map((adj, index) => (
+          <View key={index} style={styles.adjustment}>
+            <View style={styles.adjustmentHeader}>
+              <Text style={styles.adjustmentFactor}>{adj.factor}</Text>
+              <Text style={[
+                styles.adjustmentValue,
+                { color: adj.adjustment > 0 ? colors.danger[500] : colors.success[500] }
+              ]}>
+                {adj.adjustment > 0 ? '+' : ''}{adj.adjustment} spoon
+              </Text>
+            </View>
+            <Text style={styles.adjustmentReason}>{adj.reason}</Text>
+          </View>
+        ))}
+      </Animated.View>
+    );
+  };
+
+  const renderFeedbackSection = () => {
+    if (!estimate) return null;
+
+    if (feedbackGiven) {
+      return (
+        <Animated.View entering={FadeIn} style={styles.feedbackThanks}>
+          <Text style={styles.feedbackThanksEmoji}>🙏</Text>
+          <Text style={styles.feedbackThanksText}>
+            Thanks! Your feedback helps improve predictions.
+          </Text>
+        </Animated.View>
+      );
+    }
+
+    return (
+      <Animated.View entering={FadeInDown.delay(400)} style={styles.feedbackCard}>
+        <Text style={styles.feedbackTitle}>Was this estimate helpful?</Text>
+        <View style={styles.feedbackButtons}>
+          <TouchableOpacity
+            style={[styles.feedbackButton, styles.feedbackButtonPositive]}
+            onPress={() => handleFeedback(true)}
+          >
+            <Text style={styles.feedbackButtonEmoji}>👍</Text>
+            <Text style={styles.feedbackButtonText}>Yes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.feedbackButton, styles.feedbackButtonNegative]}
+            onPress={() => handleFeedback(false)}
+          >
+            <Text style={styles.feedbackButtonEmoji}>👎</Text>
+            <Text style={styles.feedbackButtonText}>No</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.feedbackHint}>
+          Your feedback improves future predictions
+        </Text>
+      </Animated.View>
+    );
+  };
+
+  const renderPatternInsight = () => {
+    if (!patterns || patterns.insights.length === 0) return null;
+
+    // Show a relevant insight
+    const relevantInsight = patterns.insights.find(i => 
+      i.toLowerCase().includes('energy') || i.toLowerCase().includes('productive')
+    ) || patterns.insights[0];
+
+    return (
+      <Animated.View entering={FadeInDown.delay(50)} style={styles.insightBanner}>
+        <Text style={styles.insightIcon}>💡</Text>
+        <Text style={styles.insightText}>{relevantInsight}</Text>
+      </Animated.View>
+    );
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Header */}
@@ -122,10 +319,18 @@ export const SpoonEstimator: React.FC<SpoonEstimatorProps> = ({
         <Text style={styles.subtitle}>
           Estimate how much energy this task will take
         </Text>
+        {mlPrediction?.isPersonalized && (
+          <View style={styles.personalizedBadge}>
+            <Text style={styles.personalizedBadgeText}>🧠 ML-Enhanced</Text>
+          </View>
+        )}
       </Animated.View>
 
       {!estimate ? (
         <>
+          {/* Pattern Insight Banner */}
+          {renderPatternInsight()}
+
           {/* Task Input */}
           <Animated.View entering={FadeInDown.delay(100)} style={styles.inputGroup}>
             <Text style={styles.label}>What task do you want to estimate?</Text>
@@ -177,6 +382,34 @@ export const SpoonEstimator: React.FC<SpoonEstimatorProps> = ({
             </View>
           </Animated.View>
 
+          {/* Time of Day (auto-detected but adjustable) */}
+          <Animated.View entering={FadeInDown.delay(350)} style={styles.inputGroup}>
+            <Text style={styles.label}>When will you do this? (Auto-detected)</Text>
+            <View style={styles.timeSelector}>
+              {TIME_OF_DAY_OPTIONS.map(({ value, label, emoji }) => (
+                <TouchableOpacity
+                  key={value}
+                  style={[
+                    styles.timeOption,
+                    timeOfDay === value && styles.timeOptionSelected,
+                  ]}
+                  onPress={async () => {
+                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setTimeOfDay(value);
+                  }}
+                >
+                  <Text style={styles.timeEmoji}>{emoji}</Text>
+                  <Text style={[
+                    styles.timeLabel,
+                    timeOfDay === value && styles.timeLabelSelected
+                  ]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Animated.View>
+
           {/* Error */}
           {error && (
             <Text style={styles.error}>{error}</Text>
@@ -203,14 +436,18 @@ export const SpoonEstimator: React.FC<SpoonEstimatorProps> = ({
       ) : (
         /* Results */
         <Animated.View entering={FadeIn}>
+          {/* ML Badge */}
+          {renderMLBadge()}
+
           {/* Spoon Count */}
           <View style={styles.resultCard}>
             <Text style={styles.resultLabel}>Energy Cost</Text>
-            {renderSpoonMeter(estimate.spoons)}
-            <Text style={[styles.resultValue, { color: getSpoonColor(estimate.spoons) }]}>
+            {renderSpoonMeter(estimate.spoons ?? 3)}
+            <Text style={[styles.resultValue, { color: getSpoonColor(estimate.spoons ?? 3) }]}>
               {estimate.label}
             </Text>
             <Text style={styles.resultEmoji}>{estimate.emoji ?? '🥄🥄🥄'}</Text>
+            {renderConfidenceIndicator()}
           </View>
 
           {/* Explanation */}
@@ -218,64 +455,63 @@ export const SpoonEstimator: React.FC<SpoonEstimatorProps> = ({
             <Text style={styles.explanationText}>{estimate.explanation ?? 'Energy cost estimated based on task complexity.'}</Text>
           </View>
 
+          {/* ML Adjustments */}
+          {renderMLAdjustments()}
+
           {/* Factors */}
-          <View style={styles.factorsCard}>
-            <Text style={styles.factorsTitle}>🔍 Contributing Factors</Text>
-            {estimate.factors.map((factor, index) => (
-              <View key={index} style={styles.factor}>
-                <View style={styles.factorHeader}>
-                  <Text style={styles.factorName}>{factor.name}</Text>
-                  <View
-                    style={[
-                      styles.factorImpact,
-                      {
-                        backgroundColor:
-                          factor.impact === 'high'
-                            ? colors.danger[100]
-                            : factor.impact === 'medium'
-                            ? colors.warning[100]
-                            : colors.success[100],
-                      },
-                    ]}
-                  >
-                    <Text
+          {estimate.factors && estimate.factors.length > 0 && (
+            <View style={styles.factorsCard}>
+              <Text style={styles.factorsTitle}>🔍 Contributing Factors</Text>
+              {estimate.factors.map((factor, index) => (
+                <View key={index} style={styles.factor}>
+                  <View style={styles.factorHeader}>
+                    <Text style={styles.factorName}>{factor.name}</Text>
+                    <View
                       style={[
-                        styles.factorImpactText,
+                        styles.factorImpact,
                         {
-                          color:
+                          backgroundColor:
                             factor.impact === 'high'
-                              ? colors.danger[700]
+                              ? colors.danger[100]
                               : factor.impact === 'medium'
-                              ? colors.warning[700]
-                              : colors.success[700],
+                              ? colors.warning[100]
+                              : colors.success[100],
                         },
                       ]}
                     >
-                      {factor.impact.toUpperCase()}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.factorImpactText,
+                          {
+                            color:
+                              factor.impact === 'high'
+                                ? colors.danger[700]
+                                : factor.impact === 'medium'
+                                ? colors.warning[700]
+                                : colors.success[700],
+                          },
+                        ]}
+                      >
+                        {factor.impact.toUpperCase()}
+                      </Text>
+                    </View>
                   </View>
+                  <Text style={styles.factorDescription}>{factor.description}</Text>
                 </View>
-                <Text style={styles.factorDescription}>{factor.description}</Text>
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          )}
 
           {/* Feasibility */}
           {estimate.feasibility && typeof estimate.feasibility === 'string' && (
             <View style={styles.feasibilityCard}>
               <Text style={styles.feasibilityTitle}>📊 Based on Your Energy</Text>
               <Text style={styles.feasibilityValue}>
-                {typeof estimate.feasibility === 'string' ? (
-                  <>
-                    {estimate.feasibility === 'easy' && '✅ Easy - You got this!'}
-                    {estimate.feasibility === 'manageable' && '👍 Manageable - Pace yourself'}
-                    {estimate.feasibility === 'challenging' && '⚠️ Challenging - Consider breaking it down'}
-                    {estimate.feasibility === 'difficult' && '🚨 Difficult - Maybe save for later'}
-                    {!['easy', 'manageable', 'challenging', 'difficult'].includes(estimate.feasibility) && estimate.feasibility}
-                  </>
-                ) : (
-                  estimate.feasibility.recommendation
-                )}
+                {estimate.feasibility === 'easy' && '✅ Easy - You got this!'}
+                {estimate.feasibility === 'manageable' && '👍 Manageable - Pace yourself'}
+                {estimate.feasibility === 'challenging' && '⚠️ Challenging - Consider breaking it down'}
+                {estimate.feasibility === 'difficult' && '🚨 Difficult - Maybe save for later'}
+                {!['easy', 'manageable', 'challenging', 'difficult'].includes(estimate.feasibility) && estimate.feasibility}
               </Text>
               {estimate.adjustedSuggestion && (
                 <Text style={styles.feasibilitySuggestion}>
@@ -286,23 +522,31 @@ export const SpoonEstimator: React.FC<SpoonEstimatorProps> = ({
           )}
 
           {/* Suggestions */}
-          <View style={styles.suggestionsCard}>
-            <Text style={styles.suggestionsTitle}>💡 Tips to Make It Easier</Text>
-            {estimate.suggestions.map((suggestion, index) => (
-              <View key={index} style={styles.suggestion}>
-                <Text style={styles.suggestionBullet}>•</Text>
-                <Text style={styles.suggestionText}>{suggestion}</Text>
-              </View>
-            ))}
-          </View>
+          {estimate.suggestions && estimate.suggestions.length > 0 && (
+            <View style={styles.suggestionsCard}>
+              <Text style={styles.suggestionsTitle}>💡 Tips to Make It Easier</Text>
+              {estimate.suggestions.map((suggestion, index) => (
+                <View key={index} style={styles.suggestion}>
+                  <Text style={styles.suggestionBullet}>•</Text>
+                  <Text style={styles.suggestionText}>{suggestion}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Feedback Section */}
+          {renderFeedbackSection()}
 
           {/* Try Another */}
           <TouchableOpacity
             style={styles.tryAnotherButton}
             onPress={() => {
               setEstimate(null);
+              setMlPrediction(null);
               setTaskTitle('');
               setTaskDescription('');
+              setFeedbackGiven(false);
+              setToolUsageId(null);
             }}
           >
             <Text style={styles.tryAnotherText}>Estimate Another Task</Text>
@@ -334,6 +578,19 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 15,
     color: colors.gray[500],
+  },
+  personalizedBadge: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primary[100],
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  personalizedBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary[700],
   },
   inputGroup: {
     marginBottom: 20,
@@ -381,6 +638,52 @@ const styles = StyleSheet.create({
     color: colors.gray[600],
     textAlign: 'center',
   },
+  timeSelector: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  timeOption: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.gray[200],
+    backgroundColor: colors.gray[50],
+  },
+  timeOptionSelected: {
+    borderColor: colors.primary[500],
+    backgroundColor: colors.primary[50],
+  },
+  timeEmoji: {
+    fontSize: 18,
+    marginBottom: 2,
+  },
+  timeLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.gray[600],
+  },
+  timeLabelSelected: {
+    color: colors.primary[700],
+  },
+  insightBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary[50],
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  insightIcon: {
+    fontSize: 16,
+  },
+  insightText: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.primary[700],
+  },
   error: {
     fontSize: 14,
     color: colors.danger[500],
@@ -408,6 +711,155 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
+  // ML Badge styles
+  mlBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary[100],
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: 16,
+    alignSelf: 'center',
+    gap: 6,
+  },
+  mlBadgeIcon: {
+    fontSize: 14,
+  },
+  mlBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary[700],
+  },
+  // Confidence indicator
+  confidenceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 8,
+  },
+  confidenceLabel: {
+    fontSize: 12,
+    color: colors.gray[500],
+  },
+  confidenceBar: {
+    flex: 1,
+    height: 6,
+    backgroundColor: colors.gray[200],
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  confidenceFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  confidenceText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  // ML Adjustments card
+  adjustmentsCard: {
+    backgroundColor: colors.primary[50],
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  adjustmentsTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primary[700],
+    marginBottom: 12,
+  },
+  adjustment: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.primary[100],
+  },
+  adjustmentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  adjustmentFactor: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary[800],
+  },
+  adjustmentValue: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  adjustmentReason: {
+    fontSize: 12,
+    color: colors.primary[600],
+  },
+  // Feedback styles
+  feedbackCard: {
+    backgroundColor: colors.gray[50],
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  feedbackTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.gray[700],
+    marginBottom: 12,
+  },
+  feedbackButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 8,
+  },
+  feedbackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 6,
+  },
+  feedbackButtonPositive: {
+    backgroundColor: colors.success[100],
+  },
+  feedbackButtonNegative: {
+    backgroundColor: colors.danger[100],
+  },
+  feedbackButtonEmoji: {
+    fontSize: 16,
+  },
+  feedbackButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.gray[700],
+  },
+  feedbackHint: {
+    fontSize: 11,
+    color: colors.gray[400],
+  },
+  feedbackThanks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.success[50],
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+    gap: 8,
+  },
+  feedbackThanksEmoji: {
+    fontSize: 18,
+  },
+  feedbackThanksText: {
+    fontSize: 14,
+    color: colors.success[700],
+  },
+  // Existing result styles
   resultCard: {
     backgroundColor: colors.gray[50],
     borderRadius: 20,

@@ -8,6 +8,21 @@ export default function WellnessLayout() {
         headerShown: false,
         animation: 'slide_from_right',
       }}
-    />
+    >
+      <Stack.Screen
+        name="mood"
+        options={{
+          presentation: 'modal',
+          animation: 'slide_from_bottom',
+        }}
+      />
+      <Stack.Screen
+        name="breathing"
+        options={{
+          presentation: 'modal',
+          animation: 'slide_from_bottom',
+        }}
+      />
+    </Stack>
   );
 }

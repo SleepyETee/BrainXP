@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,11 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { colors } from '../../theme/colors';
 import { useTherapyStore } from '../../stores/therapyStore';
+import { useMLStore, TaskRecommendation } from '../../stores/mlStore';
 import * as Haptics from 'expo-haptics';
 
 interface FocusSessionPlannerProps {
@@ -28,10 +30,59 @@ export const FocusSessionPlanner: React.FC<FocusSessionPlannerProps> = ({
   const getRecommendedStepCount = useTherapyStore((state) => state.getRecommendedStepCount);
   const createSessionPlan = useTherapyStore((state) => state.createSessionPlan);
   
+  // ML Store integration
+  const patterns = useMLStore((state) => state.patterns);
+  const getRecommendations = useMLStore((state) => state.getRecommendations);
+  const submitFeedback = useMLStore((state) => state.submitFeedback);
+  const fetchPatterns = useMLStore((state) => state.fetchPatterns);
+  
   const recommendedSteps = React.useMemo(() => getRecommendedStepCount(), [profile]);
   const [steps, setSteps] = useState<string[]>(['']);
   const [showTip, setShowTip] = useState(false);
+  const [mlSuggestions, setMlSuggestions] = useState<TaskRecommendation[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [showMLInsights, setShowMLInsights] = useState(false);
   
+  // Fetch ML patterns and suggestions on mount
+  useEffect(() => {
+    fetchPatterns();
+    loadMLSuggestions();
+  }, []);
+  
+  const loadMLSuggestions = async () => {
+    if (!taskTitle) return;
+    
+    setIsLoadingSuggestions(true);
+    try {
+      const recommendations = await getRecommendations(taskTitle);
+      if (recommendations && recommendations.length > 0) {
+        setMlSuggestions(recommendations.slice(0, 3));
+      }
+    } catch (error) {
+      console.log('Could not load ML suggestions');
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+  
+  // Get optimal focus time from patterns
+  const optimalFocusInsight = React.useMemo(() => {
+    if (!patterns?.bestHours || patterns.bestHours.length === 0) return null;
+    const currentHour = new Date().getHours();
+    const currentProductivity = patterns.bestHours.find(h => h.hour === currentHour);
+    const bestHour = patterns.bestHours.reduce((best, curr) => 
+      curr.productivity > best.productivity ? curr : best
+    );
+    
+    if (currentProductivity && currentProductivity.productivity >= bestHour.productivity * 0.8) {
+      return { type: 'optimal', message: '🎯 Great timing! This is one of your peak focus hours.' };
+    } else if (bestHour) {
+      const formatHour = (h: number) => h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm` : `${h - 12}pm`;
+      return { type: 'suggestion', message: `💡 Your peak focus is usually around ${formatHour(bestHour.hour)}` };
+    }
+    return null;
+  }, [patterns]);
+
   const handleAddStep = () => {
     if (steps.length < 5) {
       setSteps([...steps, '']);
@@ -52,12 +103,35 @@ export const FocusSessionPlanner: React.FC<FocusSessionPlannerProps> = ({
     setSteps(newSteps);
   };
   
-  const handleCreatePlan = () => {
+  const handleUseSuggestion = (suggestion: TaskRecommendation) => {
+    const emptyIndex = steps.findIndex(s => !s.trim());
+    if (emptyIndex !== -1) {
+      handleUpdateStep(emptyIndex, suggestion.message);
+    } else if (steps.length < 5) {
+      setSteps([...steps, suggestion.message]);
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+  
+  const handleCreatePlan = async () => {
     const validSteps = steps.filter((s) => s.trim());
     if (validSteps.length === 0) return;
     
     const plan = createSessionPlan(sessionId, validSteps);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
+    // Track this plan creation for ML learning
+    try {
+      await submitFeedback(
+        `focus_plan_${sessionId}`,
+        true,
+        undefined,
+        { taskTitle, stepCount: validSteps.length }
+      );
+    } catch (error) {
+      // Silent fail - don't block user flow
+    }
+    
     onPlanCreated(plan.id);
   };
   
@@ -73,6 +147,43 @@ export const FocusSessionPlanner: React.FC<FocusSessionPlannerProps> = ({
           {taskTitle && `For: ${taskTitle}\n\n`}
           What {recommendedSteps} steps will you take during this session?
         </Text>
+        
+        {/* ML Insights Banner */}
+        {optimalFocusInsight && (
+          <TouchableOpacity 
+            style={[
+              styles.mlInsightBanner,
+              optimalFocusInsight.type === 'optimal' ? styles.mlInsightOptimal : styles.mlInsightSuggestion
+            ]}
+            onPress={() => setShowMLInsights(!showMLInsights)}
+          >
+            <Text style={styles.mlInsightText}>{optimalFocusInsight.message}</Text>
+          </TouchableOpacity>
+        )}
+        
+        {/* ML Step Suggestions */}
+        {mlSuggestions.length > 0 && (
+          <View style={styles.suggestionsContainer}>
+            <Text style={styles.suggestionsTitle}>✨ Suggested based on your patterns</Text>
+            {isLoadingSuggestions ? (
+              <ActivityIndicator size="small" color={colors.primary[500]} />
+            ) : (
+              <View style={styles.suggestionChips}>
+                {mlSuggestions.map((suggestion, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.suggestionChip}
+                    onPress={() => handleUseSuggestion(suggestion)}
+                  >
+                    <Text style={styles.suggestionChipText} numberOfLines={1}>
+                      + {suggestion.message}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
         
         <View style={styles.stepsContainer}>
           {steps.map((step, index) => (
@@ -137,6 +248,25 @@ export const FocusSessionPlanner: React.FC<FocusSessionPlannerProps> = ({
             </View>
           )}
         </View>
+        
+        {/* ML Learning Stats */}
+        {patterns?.estimationAccuracy !== undefined && (
+          <View style={styles.mlStatsContainer}>
+            <Text style={styles.mlStatsTitle}>📊 Your Focus Patterns</Text>
+            <View style={styles.mlStatRow}>
+              <Text style={styles.mlStatLabel}>Avg session duration:</Text>
+              <Text style={styles.mlStatValue}>
+                {patterns.averageTaskDuration ? `${Math.round(patterns.averageTaskDuration)} min` : 'Learning...'}
+              </Text>
+            </View>
+            <View style={styles.mlStatRow}>
+              <Text style={styles.mlStatLabel}>Estimation accuracy:</Text>
+              <Text style={styles.mlStatValue}>
+                {patterns.estimationAccuracy ? `${Math.round(patterns.estimationAccuracy * 100)}%` : 'Learning...'}
+              </Text>
+            </View>
+          </View>
+        )}
       </ScrollView>
       
       <View style={styles.buttonRow}>
@@ -313,6 +443,81 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  mlInsightBanner: {
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+  },
+  mlInsightOptimal: {
+    backgroundColor: colors.success[50],
+    borderLeftWidth: 3,
+    borderLeftColor: colors.success[500],
+  },
+  mlInsightSuggestion: {
+    backgroundColor: colors.primary[50],
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary[500],
+  },
+  mlInsightText: {
+    fontSize: 13,
+    color: colors.gray[700],
+    fontWeight: '500',
+  },
+  suggestionsContainer: {
+    backgroundColor: colors.gray[50],
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+  },
+  suggestionsTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.gray[600],
+    marginBottom: 10,
+  },
+  suggestionChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  suggestionChip: {
+    backgroundColor: colors.primary[100],
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    maxWidth: '90%',
+  },
+  suggestionChipText: {
+    fontSize: 13,
+    color: colors.primary[700],
+    fontWeight: '500',
+  },
+  mlStatsContainer: {
+    backgroundColor: colors.gray[50],
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 16,
+  },
+  mlStatsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.gray[700],
+    marginBottom: 10,
+  },
+  mlStatRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  mlStatLabel: {
+    fontSize: 13,
+    color: colors.gray[500],
+  },
+  mlStatValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.gray[700],
   },
 });
 

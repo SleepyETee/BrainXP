@@ -25,7 +25,7 @@ const taskSchema = z.object({
   dueDate: z.string().optional(),
   dueTime: z.string().optional(),
   estimatedMinutes: z.number().min(1).max(480).optional(),
-  priority: z.enum(['urgent_important', 'important', 'urgent', 'low', 'none']),
+  priority: z.enum(['urgent_important', 'important', 'urgent', 'high', 'medium', 'low', 'none']),
   energyRequired: z.enum(['low', 'medium', 'high']),
   tags: z.array(z.string()).optional(),
   projectId: z.string().optional(),

@@ -150,7 +150,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
   const isDone = task.status === 'done';
   const subtaskCount = task.subtasks?.length || 0;
-  const completedSubtasks = task.subtasks?.filter(s => s.status === 'done').length || 0;
+  const completedSubtasks = task.subtasks?.filter(s => s.completed).length || 0;
 
   return (
     <Animated.View

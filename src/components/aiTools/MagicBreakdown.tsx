@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,12 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { magicBreakdown } from '../../services/api/aiTools';
 import { MagicBreakdownResult, SpoonLevel } from '../../types/aiTools';
 import { colors, shadows } from '../../theme/colors';
+import { useMLStore } from '../../stores/mlStore';
 
 type Granularity = 'coarse' | 'medium' | 'fine' | 'micro';
 
@@ -22,24 +24,102 @@ interface MagicBreakdownProps {
   onBreakdownComplete?: (result: MagicBreakdownResult) => void;
 }
 
-const GRANULARITY_OPTIONS: { value: Granularity; label: string; emoji: string }[] = [
-  { value: 'coarse', label: 'Big steps', emoji: '🦣' },
-  { value: 'medium', label: 'Manageable', emoji: '🐕' },
-  { value: 'fine', label: 'Small', emoji: '🐈' },
-  { value: 'micro', label: 'Tiny', emoji: '🐛' },
+const GRANULARITY_OPTIONS: { value: Granularity; label: string; emoji: string; description: string }[] = [
+  { value: 'coarse', label: 'Big steps', emoji: '🦣', description: '3-5 major phases' },
+  { value: 'medium', label: 'Manageable', emoji: '🐕', description: '5-8 clear steps' },
+  { value: 'fine', label: 'Small', emoji: '🐈', description: '8-12 small tasks' },
+  { value: 'micro', label: 'Tiny', emoji: '🐛', description: '12+ tiny actions' },
 ];
 
 export const MagicBreakdown: React.FC<MagicBreakdownProps> = ({
   initialTask = '',
-  initialGranularity = 'medium',
+  initialGranularity,
   energyLevel,
   onBreakdownComplete,
 }) => {
   const [task, setTask] = useState(initialTask);
-  const [granularity, setGranularity] = useState<Granularity>(initialGranularity);
+  const [granularity, setGranularity] = useState<Granularity>(initialGranularity || 'medium');
   const [result, setResult] = useState<MagicBreakdownResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // ML Integration
+  const [toolUsageId, setToolUsageId] = useState<string | null>(null);
+  const [feedbackGiven, setFeedbackGiven] = useState(false);
+  const [mlRecommendation, setMlRecommendation] = useState<{
+    suggestedGranularity: Granularity;
+    reason: string;
+    confidence: number;
+  } | null>(null);
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+
+  const { patterns, fetchPatterns, submitFeedback, getRecommendations } = useMLStore();
+
+  // Fetch patterns and determine recommended granularity
+  useEffect(() => {
+    const initML = async () => {
+      try {
+        const userPatterns = await fetchPatterns();
+        
+        // Determine recommended granularity based on user patterns
+        if (userPatterns && !initialGranularity) {
+          let suggested: Granularity = 'medium';
+          let reason = '';
+          let confidence = 0.5;
+
+          // Based on preferred task size
+          if (userPatterns.preferredTaskSize === 'micro') {
+            suggested = 'micro';
+            reason = 'You work best with tiny, specific steps';
+            confidence = 0.85;
+          } else if (userPatterns.preferredTaskSize === 'small') {
+            suggested = 'fine';
+            reason = 'Small steps match your productivity style';
+            confidence = 0.8;
+          } else if (userPatterns.preferredTaskSize === 'large') {
+            suggested = 'coarse';
+            reason = 'You prefer bigger chunks of work';
+            confidence = 0.75;
+          }
+
+          // Adjust based on current energy (if provided via energyLevel)
+          if (energyLevel) {
+            const spoonValue = typeof energyLevel === 'number' ? energyLevel : 
+              energyLevel === 'low' ? 1 : energyLevel === 'medium' ? 3 : 5;
+            
+            if (spoonValue <= 2) {
+              // Low energy = smaller steps
+              if (suggested === 'coarse') suggested = 'medium';
+              else if (suggested === 'medium') suggested = 'fine';
+              else suggested = 'micro';
+              reason = 'Smaller steps recommended for your current energy';
+              confidence = 0.9;
+            }
+          }
+
+          // Check time of day patterns
+          const hour = new Date().getHours();
+          const currentPeriod = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+          if (userPatterns.peakEnergyTime !== currentPeriod) {
+            // Not peak time, recommend smaller steps
+            if (suggested === 'coarse') suggested = 'medium';
+            confidence = Math.min(confidence + 0.1, 0.95);
+          }
+
+          setMlRecommendation({ suggestedGranularity: suggested, reason, confidence });
+          
+          // Auto-apply if confidence is high and no initial value
+          if (confidence >= 0.8 && !initialGranularity) {
+            setGranularity(suggested);
+          }
+        }
+      } catch {
+        // ML features are optional, continue without them
+      }
+    };
+
+    initML();
+  }, [energyLevel]);
 
   const handleBreakdown = async () => {
     if (!task.trim()) {
@@ -49,13 +129,47 @@ export const MagicBreakdown: React.FC<MagicBreakdownProps> = ({
 
     setIsLoading(true);
     setError(null);
+    setCompletedSteps(new Set());
 
     try {
+      // Generate usage ID for tracking
+      const usageId = `breakdown-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      setToolUsageId(usageId);
+      setFeedbackGiven(false);
+
       const breakdown = await magicBreakdown({
         task: task.trim(),
         granularity,
         currentEnergy: energyLevel,
       });
+
+      // Enhance result with ML data if available
+      if (patterns) {
+        breakdown.mlEnhanced = true;
+        breakdown.personalizedInsights = [];
+
+        // Add personalized insights
+        if (patterns.peakEnergyTime) {
+          const hour = new Date().getHours();
+          const isPeakTime = 
+            (patterns.peakEnergyTime === 'morning' && hour >= 6 && hour < 12) ||
+            (patterns.peakEnergyTime === 'afternoon' && hour >= 12 && hour < 17) ||
+            (patterns.peakEnergyTime === 'evening' && hour >= 17 && hour < 21);
+          
+          if (isPeakTime) {
+            breakdown.personalizedInsights.push('Great timing! This is your peak productivity window.');
+          } else {
+            breakdown.personalizedInsights.push(`Consider tackling harder steps during your peak time (${patterns.peakEnergyTime}).`);
+          }
+        }
+
+        if (patterns.averageTaskDuration && breakdown.totalEstimatedMinutes) {
+          if (breakdown.totalEstimatedMinutes > patterns.averageTaskDuration * 2) {
+            breakdown.personalizedInsights.push('This is a larger task than usual. Take breaks between steps!');
+          }
+        }
+      }
+
       setResult(breakdown);
       onBreakdownComplete?.(breakdown);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -67,12 +181,54 @@ export const MagicBreakdown: React.FC<MagicBreakdownProps> = ({
     }
   };
 
+  const handleStepToggle = (index: number) => {
+    const newCompleted = new Set(completedSteps);
+    if (newCompleted.has(index)) {
+      newCompleted.delete(index);
+    } else {
+      newCompleted.add(index);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setCompletedSteps(newCompleted);
+  };
+
+  const handleFeedback = async (wasHelpful: boolean) => {
+    if (!toolUsageId || feedbackGiven) return;
+
+    setFeedbackGiven(true);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    try {
+      await submitFeedback(toolUsageId, wasHelpful, undefined, {
+        taskLength: task.length,
+        granularityUsed: granularity,
+        stepsGenerated: result?.steps.length || 0,
+        stepsCompleted: completedSteps.size,
+        totalMinutes: result?.totalEstimatedMinutes,
+        mlRecommendationFollowed: mlRecommendation?.suggestedGranularity === granularity,
+      });
+    } catch {
+      // Feedback is best-effort
+    }
+  };
+
+  const handleGranularityChange = async (value: Granularity) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setGranularity(value);
+  };
+
+  const progressPercentage = result?.steps.length 
+    ? Math.round((completedSteps.size / result.steps.length) * 100) 
+    : 0;
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>🪄 Magic Breakdown</Text>
-      <Text style={styles.subtitle}>Turn an overwhelming task into tiny, doable steps.</Text>
+      <Animated.View entering={FadeIn}>
+        <Text style={styles.title}>🪄 Magic Breakdown</Text>
+        <Text style={styles.subtitle}>Turn an overwhelming task into tiny, doable steps.</Text>
+      </Animated.View>
 
-      <View style={styles.card}>
+      <Animated.View entering={FadeInDown.delay(100)} style={styles.card}>
         <Text style={styles.label}>Task</Text>
         <TextInput
           style={styles.input}
@@ -84,6 +240,30 @@ export const MagicBreakdown: React.FC<MagicBreakdownProps> = ({
         />
 
         <Text style={[styles.label, { marginTop: 12 }]}>Granularity</Text>
+        
+        {/* ML Recommendation Banner */}
+        {mlRecommendation && mlRecommendation.confidence >= 0.7 && (
+          <Animated.View entering={FadeInDown.delay(150)} style={styles.mlBanner}>
+            <Text style={styles.mlBannerIcon}>🧠</Text>
+            <View style={styles.mlBannerContent}>
+              <Text style={styles.mlBannerText}>
+                Recommended: <Text style={styles.mlBannerHighlight}>
+                  {GRANULARITY_OPTIONS.find(o => o.value === mlRecommendation.suggestedGranularity)?.label}
+                </Text>
+              </Text>
+              <Text style={styles.mlBannerReason}>{mlRecommendation.reason}</Text>
+            </View>
+            {granularity !== mlRecommendation.suggestedGranularity && (
+              <TouchableOpacity
+                style={styles.mlApplyButton}
+                onPress={() => handleGranularityChange(mlRecommendation.suggestedGranularity)}
+              >
+                <Text style={styles.mlApplyButtonText}>Apply</Text>
+              </TouchableOpacity>
+            )}
+          </Animated.View>
+        )}
+
         <View style={styles.options}>
           {GRANULARITY_OPTIONS.map((option) => (
             <TouchableOpacity
@@ -91,8 +271,10 @@ export const MagicBreakdown: React.FC<MagicBreakdownProps> = ({
               style={[
                 styles.option,
                 granularity === option.value && styles.optionActive,
+                mlRecommendation?.suggestedGranularity === option.value && 
+                  granularity !== option.value && styles.optionRecommended,
               ]}
-              onPress={() => setGranularity(option.value)}
+              onPress={() => handleGranularityChange(option.value)}
             >
               <Text style={styles.optionEmoji}>{option.emoji}</Text>
               <Text
@@ -114,14 +296,50 @@ export const MagicBreakdown: React.FC<MagicBreakdownProps> = ({
           onPress={handleBreakdown}
           disabled={isLoading}
         >
-          {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Break It Down</Text>}
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Break It Down</Text>
+          )}
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       {result && (
-        <View style={styles.resultCard}>
+        <Animated.View entering={FadeInUp.delay(100)} style={styles.resultCard}>
+          {/* ML Enhanced Badge */}
+          {result.mlEnhanced && (
+            <View style={styles.mlBadge}>
+              <Text style={styles.mlBadgeText}>🧠 Personalized</Text>
+            </View>
+          )}
+
           <Text style={styles.resultTitle}>Smallest first step</Text>
           <Text style={styles.firstStep}>{result.smallestFirstStep}</Text>
+
+          {/* Personalized Insights */}
+          {result.personalizedInsights && result.personalizedInsights.length > 0 && (
+            <View style={styles.insightsContainer}>
+              {result.personalizedInsights.map((insight, idx) => (
+                <View key={idx} style={styles.insightItem}>
+                  <Text style={styles.insightIcon}>💡</Text>
+                  <Text style={styles.insightText}>{insight}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Progress Tracker */}
+          {completedSteps.size > 0 && (
+            <View style={styles.progressContainer}>
+              <View style={styles.progressHeader}>
+                <Text style={styles.progressLabel}>Progress</Text>
+                <Text style={styles.progressValue}>{completedSteps.size}/{result.steps.length}</Text>
+              </View>
+              <View style={styles.progressBar}>
+                <View style={[styles.progressFill, { width: `${progressPercentage}%` }]} />
+              </View>
+            </View>
+          )}
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Total time</Text>
@@ -135,21 +353,78 @@ export const MagicBreakdown: React.FC<MagicBreakdownProps> = ({
             </Text>
           </View>
 
-          <Text style={styles.stepsHeader}>Steps</Text>
+          <Text style={styles.stepsHeader}>Steps (tap to mark complete)</Text>
           {result.steps.map((step, idx) => (
-            <View key={step.id || idx} style={styles.stepCard}>
+            <TouchableOpacity
+              key={step.id || idx}
+              style={[
+                styles.stepCard,
+                completedSteps.has(idx) && styles.stepCardCompleted,
+              ]}
+              onPress={() => handleStepToggle(idx)}
+              activeOpacity={0.7}
+            >
               <View style={styles.stepHeader}>
-                <Text style={styles.stepNumber}>{idx + 1}</Text>
+                <View style={[
+                  styles.stepCheckbox,
+                  completedSteps.has(idx) && styles.stepCheckboxChecked,
+                ]}>
+                  {completedSteps.has(idx) && <Text style={styles.stepCheckmark}>✓</Text>}
+                </View>
+                <Text style={[
+                  styles.stepNumber,
+                  completedSteps.has(idx) && styles.stepNumberCompleted,
+                ]}>
+                  {idx + 1}
+                </Text>
                 <Text style={styles.stepEmoji}>{step.emoji || '✨'}</Text>
                 <Text style={styles.stepTime}>~{step.estimatedMinutes}m</Text>
                 <Text style={styles.stepSpoons}>{'🥄'.repeat(step.spoons || 1)}</Text>
               </View>
-              <Text style={styles.stepTitle}>{step.title}</Text>
-              {step.description && <Text style={styles.stepDescription}>{step.description}</Text>}
+              <Text style={[
+                styles.stepTitle,
+                completedSteps.has(idx) && styles.stepTitleCompleted,
+              ]}>
+                {step.title}
+              </Text>
+              {step.description && (
+                <Text style={[
+                  styles.stepDescription,
+                  completedSteps.has(idx) && styles.stepDescriptionCompleted,
+                ]}>
+                  {step.description}
+                </Text>
+              )}
               {step.tip && <Text style={styles.stepTip}>💡 {step.tip}</Text>}
-            </View>
+            </TouchableOpacity>
           ))}
-        </View>
+
+          {/* Feedback Section */}
+          {!feedbackGiven ? (
+            <Animated.View entering={FadeIn.delay(300)} style={styles.feedbackSection}>
+              <Text style={styles.feedbackTitle}>Was this breakdown helpful?</Text>
+              <View style={styles.feedbackButtons}>
+                <TouchableOpacity
+                  style={[styles.feedbackButton, styles.feedbackButtonPositive]}
+                  onPress={() => handleFeedback(true)}
+                >
+                  <Text style={styles.feedbackButtonText}>👍 Yes</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.feedbackButton, styles.feedbackButtonNegative]}
+                  onPress={() => handleFeedback(false)}
+                >
+                  <Text style={styles.feedbackButtonText}>👎 No</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.feedbackHint}>Your feedback helps personalize future breakdowns</Text>
+            </Animated.View>
+          ) : (
+            <Animated.View entering={FadeIn} style={styles.feedbackThanks}>
+              <Text style={styles.feedbackThanksText}>✨ Thanks for the feedback!</Text>
+            </Animated.View>
+          )}
+        </Animated.View>
       )}
     </ScrollView>
   );
@@ -177,6 +452,48 @@ const styles = StyleSheet.create({
     color: colors.gray[800],
     backgroundColor: colors.gray[50],
   },
+  // ML Recommendation Banner
+  mlBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary[50],
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  mlBannerIcon: {
+    fontSize: 18,
+    marginRight: 8,
+  },
+  mlBannerContent: {
+    flex: 1,
+  },
+  mlBannerText: {
+    fontSize: 13,
+    color: colors.gray[700],
+  },
+  mlBannerHighlight: {
+    fontWeight: '700',
+    color: colors.primary[700],
+  },
+  mlBannerReason: {
+    fontSize: 11,
+    color: colors.gray[500],
+    marginTop: 2,
+  },
+  mlApplyButton: {
+    backgroundColor: colors.primary[500],
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  mlApplyButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   options: { flexDirection: 'row', gap: 8 },
   option: {
     flex: 1,
@@ -190,6 +507,10 @@ const styles = StyleSheet.create({
   optionActive: {
     borderColor: colors.primary[500],
     backgroundColor: `${colors.primary[500]}15`,
+  },
+  optionRecommended: {
+    borderColor: colors.primary[300],
+    borderStyle: 'dashed',
   },
   optionEmoji: { fontSize: 18, marginBottom: 2 },
   optionText: { fontSize: 13, color: colors.gray[700] },
@@ -211,8 +532,73 @@ const styles = StyleSheet.create({
     ...shadows.sm,
     gap: 8,
   },
+  mlBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  mlBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.primary[700],
+  },
   resultTitle: { fontSize: 14, fontWeight: '700', color: colors.gray[800] },
   firstStep: { fontSize: 16, fontWeight: '700', color: colors.success[700] },
+  insightsContainer: {
+    backgroundColor: colors.primary[50],
+    borderRadius: 10,
+    padding: 10,
+    marginVertical: 8,
+  },
+  insightItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  insightIcon: {
+    fontSize: 12,
+    marginRight: 6,
+  },
+  insightText: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.primary[800],
+  },
+  progressContainer: {
+    backgroundColor: colors.success[50],
+    borderRadius: 10,
+    padding: 10,
+    marginVertical: 8,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  progressLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.success[700],
+  },
+  progressValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.success[700],
+  },
+  progressBar: {
+    height: 6,
+    backgroundColor: colors.success[200],
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.success[500],
+    borderRadius: 3,
+  },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
   summaryLabel: { color: colors.gray[600] },
   summaryValue: { fontWeight: '700', color: colors.gray[800] },
@@ -224,7 +610,29 @@ const styles = StyleSheet.create({
     padding: 12,
     marginTop: 8,
   },
+  stepCardCompleted: {
+    backgroundColor: colors.success[50],
+    borderColor: colors.success[300],
+  },
   stepHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  stepCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: colors.gray[300],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepCheckboxChecked: {
+    backgroundColor: colors.success[500],
+    borderColor: colors.success[500],
+  },
+  stepCheckmark: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   stepNumber: {
     width: 24,
     height: 24,
@@ -232,14 +640,79 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary[500],
     color: '#fff',
     textAlign: 'center',
+    lineHeight: 24,
     fontWeight: '700',
+  },
+  stepNumberCompleted: {
+    backgroundColor: colors.success[500],
   },
   stepEmoji: { fontSize: 16 },
   stepTime: { marginLeft: 'auto', color: colors.gray[600] },
   stepSpoons: { marginLeft: 6, color: colors.gray[600], fontSize: 12 },
   stepTitle: { marginTop: 4, fontWeight: '700', color: colors.gray[900] },
+  stepTitleCompleted: {
+    textDecorationLine: 'line-through',
+    color: colors.gray[500],
+  },
   stepDescription: { color: colors.gray[700], marginTop: 2 },
+  stepDescriptionCompleted: {
+    color: colors.gray[400],
+  },
   stepTip: { color: colors.primary[700], marginTop: 4 },
+  // Feedback Section
+  feedbackSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray[200],
+    alignItems: 'center',
+  },
+  feedbackTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.gray[700],
+    marginBottom: 10,
+  },
+  feedbackButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  feedbackButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  feedbackButtonPositive: {
+    backgroundColor: colors.success[50],
+    borderColor: colors.success[300],
+  },
+  feedbackButtonNegative: {
+    backgroundColor: colors.gray[50],
+    borderColor: colors.gray[300],
+  },
+  feedbackButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.gray[700],
+  },
+  feedbackHint: {
+    fontSize: 11,
+    color: colors.gray[400],
+    marginTop: 8,
+  },
+  feedbackThanks: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray[200],
+    alignItems: 'center',
+  },
+  feedbackThanksText: {
+    fontSize: 14,
+    color: colors.success[600],
+    fontWeight: '600',
+  },
 });
 
 export default MagicBreakdown;

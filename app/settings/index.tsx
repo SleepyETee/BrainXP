@@ -415,14 +415,11 @@ export default function SettingsScreen() {
           />
           <SettingRow
             icon="🔊"
-            title="Background Sound"
+            title="Default Focus Sound"
             value={settings.defaultBackgroundSound === 'none' ? 'None' : 
                    settings.defaultBackgroundSound.charAt(0).toUpperCase() + settings.defaultBackgroundSound.slice(1).replace('_', ' ')}
-            title="Default Focus Sound"
-            value={settings.defaultBackgroundSound || 'None'}
             onPress={() => {
               const sounds = ['none', 'rain', 'cafe', 'nature', 'white_noise'];
-              const currentIndex = sounds.indexOf(settings.defaultBackgroundSound || 'none');
               const currentIndex = sounds.indexOf(settings.defaultBackgroundSound || 'none');
               const nextIndex = (currentIndex + 1) % sounds.length;
               playClick();
@@ -435,8 +432,6 @@ export default function SettingsScreen() {
             subtitle="Automatically start breaks after focus sessions"
             value={settings.autoStartBreaks}
             onValueChange={(value) => updateSettings({ autoStartBreaks: value })}
-              updateSettings({ defaultBackgroundSound: sounds[nextIndex] });
-            }}
           />
         </View>
 
@@ -567,31 +562,6 @@ export default function SettingsScreen() {
             onPress={() => playCelebrate()}
             showArrow={false}
           />
-          <TouchableOpacity
-            style={styles.settingRow}
-            onPress={() =>
-              updateSettings({ showXPPopups: !settings.showXPPopups })
-            }
-          >
-            <Text style={styles.settingIcon}>✨</Text>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingTitle}>XP Animations</Text>
-              <Text style={styles.settingSubtitle}>Show celebratory effects</Text>
-            </View>
-            <View
-              style={[
-                styles.toggle,
-                settings.showXPPopups && styles.toggleActive,
-              ]}
-            >
-              <View
-                style={[
-                  styles.toggleKnob,
-                  settings.showXPPopups && styles.toggleKnobActive,
-                ]}
-              />
-            </View>
-          </TouchableOpacity>
         </View>
 
         {/* Data & Privacy */}

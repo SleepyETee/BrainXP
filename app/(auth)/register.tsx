@@ -141,7 +141,8 @@ export default function RegisterScreen() {
                   error={errors.password?.message}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
-                  rightIcon={<Text>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>}
+                  leftIcon="lock-closed-outline"
+                  rightIcon={showPassword ? 'eye-outline' : 'eye-off-outline'}
                   onRightIconPress={() => setShowPassword(!showPassword)}
                 />
               )}

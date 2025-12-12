@@ -12,6 +12,10 @@ import {
   EstimateTimeInput,
   MagicBreakdownResult,
   MagicBreakdownInput,
+  FlashcardGeneratorInput,
+  FlashcardGeneratorOutput,
+  QuizGeneratorInput,
+  QuizGeneratorOutput,
 } from '../../types/aiTools';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -87,6 +91,34 @@ export const magicBreakdown = async (
 ): Promise<MagicBreakdownResult> => {
   const response = await apiClient.post<ApiResponse<MagicBreakdownResult>>(
     '/ai-tools/magic-breakdown',
+    input
+  );
+  return response.data.data;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FLASHCARD GENERATOR
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const generateFlashcards = async (
+  input: FlashcardGeneratorInput
+): Promise<FlashcardGeneratorOutput> => {
+  const response = await apiClient.post<ApiResponse<FlashcardGeneratorOutput>>(
+    '/ai-tools/generate-flashcards',
+    input
+  );
+  return response.data.data;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// QUIZ GENERATOR
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const generateQuiz = async (
+  input: QuizGeneratorInput
+): Promise<QuizGeneratorOutput> => {
+  const response = await apiClient.post<ApiResponse<QuizGeneratorOutput>>(
+    '/ai-tools/generate-quiz',
     input
   );
   return response.data.data;

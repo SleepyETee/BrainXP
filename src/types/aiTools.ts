@@ -137,6 +137,33 @@ export interface QuizGeneratorInput {
   questionCount?: number;
   questionTypes?: ('multiple_choice' | 'true_false' | 'short_answer')[];
   difficulty?: 'easy' | 'medium' | 'hard';
+  includeExplanations?: boolean;
+}
+
+export interface QuizQuestion {
+  id: string;
+  type: 'multiple_choice' | 'true_false' | 'short_answer';
+  question: string;
+  options?: string[];
+  correctIndex?: number;
+  correctAnswer: string;
+  explanation?: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  topic: string;
+  hint?: string;
+}
+
+export interface QuizGeneratorOutput {
+  questions: QuizQuestion[];
+  metadata: {
+    totalQuestions: number;
+    byDifficulty: { easy: number; medium: number; hard: number };
+    byType: { multiple_choice: number; true_false: number; short_answer: number };
+    topics: string[];
+    estimatedTime: number;
+    passingScore: number;
+  };
+  instructions: string;
 }
 
 export interface FlashcardGeneratorInput {
@@ -144,6 +171,29 @@ export interface FlashcardGeneratorInput {
   cardCount?: number;
   includeExplanations?: boolean;
   focusAreas?: string[];
+  difficulty?: 'easy' | 'medium' | 'hard';
+}
+
+export interface Flashcard {
+  id: string;
+  front: string;
+  back: string;
+  explanation?: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  tags: string[];
+  hint?: string;
+}
+
+export interface FlashcardGeneratorOutput {
+  flashcards: Flashcard[];
+  metadata: {
+    totalCards: number;
+    topicsCount: number;
+    topics: string[];
+    estimatedStudyTime: number;
+    difficulty: string;
+  };
+  studyTips: string[];
 }
 
 export interface ExplainerInput {

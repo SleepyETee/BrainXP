@@ -69,9 +69,7 @@ export default function TaskDecomposeScreen() {
       const subtasks = result.suggestedSteps.map((step, index) => ({
         id: `subtask_${Date.now()}_${index}`,
         title: step.title,
-        status: 'todo' as const,
-        order: step.order,
-        estimatedMinutes: step.estimatedMinutes,
+        completed: false,
       }));
 
       await updateTask(task.id, {

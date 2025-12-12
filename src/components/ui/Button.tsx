@@ -7,6 +7,7 @@ import {
   ViewStyle,
   TextStyle,
   Pressable,
+  View,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -17,6 +18,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { colors } from '../../theme/colors';
+import { TOUCH_TARGETS } from '../../utils/uxHelpers';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
 type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
@@ -36,6 +38,10 @@ interface ButtonProps {
   rounded?: boolean;
   style?: ViewStyle;
   textStyle?: TextStyle;
+  // Accessibility
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
+  testID?: string;
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -43,6 +49,38 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const springConfig = {
   damping: 15,
   stiffness: 400,
+};
+
+// Size config with minimum touch targets (following Apple/Material guidelines)
+const SIZE_CONFIG = {
+  xs: { 
+    minHeight: TOUCH_TARGETS.minimum, 
+    paddingVertical: 8, 
+    paddingHorizontal: 12, 
+    fontSize: 12,
+    iconSize: 14,
+  },
+  sm: { 
+    minHeight: TOUCH_TARGETS.minimum, 
+    paddingVertical: 10, 
+    paddingHorizontal: 16, 
+    fontSize: 14,
+    iconSize: 16,
+  },
+  md: { 
+    minHeight: TOUCH_TARGETS.recommended, 
+    paddingVertical: 12, 
+    paddingHorizontal: 20, 
+    fontSize: 16,
+    iconSize: 18,
+  },
+  lg: { 
+    minHeight: TOUCH_TARGETS.comfortable, 
+    paddingVertical: 16, 
+    paddingHorizontal: 28, 
+    fontSize: 18,
+    iconSize: 20,
+  },
 };
 
 export const Button: React.FC<ButtonProps> = ({
@@ -60,9 +98,13 @@ export const Button: React.FC<ButtonProps> = ({
   rounded = false,
   style,
   textStyle,
+  accessibilityLabel,
+  accessibilityHint,
+  testID,
 }) => {
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
+  const sizeConfig = SIZE_CONFIG[size];
 
   const handlePressIn = () => {
     scale.value = withSpring(0.96, springConfig);
@@ -88,7 +130,11 @@ export const Button: React.FC<ButtonProps> = ({
 
   const buttonStyles: ViewStyle[] = [
     styles.base,
-    styles[`size_${size}` as keyof typeof styles] as ViewStyle,
+    {
+      minHeight: sizeConfig.minHeight,
+      paddingVertical: sizeConfig.paddingVertical,
+      paddingHorizontal: sizeConfig.paddingHorizontal,
+    },
     rounded && styles.rounded,
     fullWidth && styles.fullWidth,
     disabled && styles.disabled,
@@ -98,8 +144,8 @@ export const Button: React.FC<ButtonProps> = ({
 
   const textStyles: TextStyle[] = [
     styles.text,
+    { fontSize: sizeConfig.fontSize },
     styles[`text_${variant}` as keyof typeof styles] as TextStyle,
-    styles[`text_${size}` as keyof typeof styles] as TextStyle,
     textStyle,
   ].filter(Boolean) as TextStyle[];
 
@@ -123,18 +169,24 @@ export const Button: React.FC<ButtonProps> = ({
     }
   };
 
+  // Accessibility state
+  const a11yState = {
+    disabled,
+    busy: loading,
+  };
+
   const content = (
-    <>
+    <View style={styles.contentContainer}>
       {loading ? (
         <ActivityIndicator color={getLoaderColor()} size="small" />
       ) : (
         <>
-          {icon && iconPosition === 'left' && icon}
+          {icon && iconPosition === 'left' && <View style={styles.iconWrapper}>{icon}</View>}
           <Text style={textStyles}>{title}</Text>
-          {icon && iconPosition === 'right' && icon}
+          {icon && iconPosition === 'right' && <View style={styles.iconWrapper}>{icon}</View>}
         </>
       )}
-    </>
+    </View>
   );
 
   if (gradient && (variant === 'primary' || variant === 'danger' || variant === 'success')) {
@@ -145,6 +197,11 @@ export const Button: React.FC<ButtonProps> = ({
         onPressOut={handlePressOut}
         disabled={disabled || loading}
         style={[animatedStyle, fullWidth && styles.fullWidth]}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel || title}
+        accessibilityHint={accessibilityHint}
+        accessibilityState={a11yState}
+        testID={testID}
       >
         <LinearGradient
           colors={getGradientColors()}
@@ -169,6 +226,11 @@ export const Button: React.FC<ButtonProps> = ({
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       disabled={disabled || loading}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel || title}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={a11yState}
+      testID={testID}
     >
       {content}
     </AnimatedPressable>
@@ -184,6 +246,8 @@ interface IconButtonProps {
   disabled?: boolean;
   haptic?: boolean;
   style?: ViewStyle;
+  accessibilityLabel: string; // Required for icon-only buttons
+  testID?: string;
 }
 
 export const IconButton: React.FC<IconButtonProps> = ({
@@ -194,6 +258,8 @@ export const IconButton: React.FC<IconButtonProps> = ({
   disabled = false,
   haptic = true,
   style,
+  accessibilityLabel,
+  testID,
 }) => {
   const scale = useSharedValue(1);
 
@@ -216,11 +282,12 @@ export const IconButton: React.FC<IconButtonProps> = ({
     transform: [{ scale: scale.value }],
   }));
 
+  // Ensure minimum touch target of 44x44
   const sizeMap = {
-    xs: 28,
-    sm: 32,
-    md: 40,
-    lg: 48,
+    xs: TOUCH_TARGETS.minimum,
+    sm: TOUCH_TARGETS.minimum,
+    md: TOUCH_TARGETS.recommended,
+    lg: TOUCH_TARGETS.comfortable,
   };
 
   return (
@@ -241,6 +308,11 @@ export const IconButton: React.FC<IconButtonProps> = ({
         animatedStyle,
         style,
       ]}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled }}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      testID={testID}
     >
       {icon}
     </AnimatedPressable>
@@ -253,7 +325,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 12,
+  },
+  contentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
+  },
+  iconWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   rounded: {
     borderRadius: 50,
@@ -290,24 +371,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.success[500],
   },
 
-  // Sizes
-  size_xs: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  size_sm: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-  },
-  size_md: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-  },
-  size_lg: {
-    paddingVertical: 16,
-    paddingHorizontal: 28,
-  },
-
   // Text base
   text: {
     fontWeight: '600',
@@ -331,20 +394,6 @@ const styles = StyleSheet.create({
   },
   text_success: {
     color: '#FFFFFF',
-  },
-
-  // Text sizes
-  text_xs: {
-    fontSize: 12,
-  },
-  text_sm: {
-    fontSize: 14,
-  },
-  text_md: {
-    fontSize: 16,
-  },
-  text_lg: {
-    fontSize: 18,
   },
 
   // Icon button

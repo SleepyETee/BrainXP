@@ -8,6 +8,15 @@ export default function TaskLayout() {
         headerShown: false,
         animation: 'slide_from_right',
       }}
-    />
+    >
+      <Stack.Screen
+        name="create"
+        options={{
+          presentation: 'modal',
+          animation: 'slide_from_bottom',
+        }}
+      />
+      <Stack.Screen name="[id]" />
+    </Stack>
   );
 }

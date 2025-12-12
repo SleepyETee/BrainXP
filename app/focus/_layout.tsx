@@ -8,6 +8,16 @@ export default function FocusLayout() {
         headerShown: false,
         animation: 'slide_from_right',
       }}
-    />
+    >
+      <Stack.Screen
+        name="setup"
+        options={{
+          presentation: 'modal',
+          animation: 'slide_from_bottom',
+        }}
+      />
+      <Stack.Screen name="active" />
+      <Stack.Screen name="complete" />
+    </Stack>
   );
 }

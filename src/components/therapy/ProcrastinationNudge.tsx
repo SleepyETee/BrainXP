@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,12 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { colors } from '../../theme/colors';
 import { useTherapyStore } from '../../stores/therapyStore';
+import { useMLStore } from '../../stores/mlStore';
 import { THERAPY_DISCLAIMER } from '../../types/therapy';
 import * as Haptics from 'expo-haptics';
 
@@ -26,6 +29,13 @@ interface ProcrastinationNudgeProps {
 
 type SelectedOption = 'break_down' | 'lower_bar' | 'drop' | 'renegotiate' | null;
 
+interface MLRecommendation {
+  recommendedOption: SelectedOption;
+  confidence: number;
+  reasoning: string;
+  successRate: number;
+}
+
 export const ProcrastinationNudge: React.FC<ProcrastinationNudgeProps> = ({
   taskId,
   taskTitle,
@@ -40,10 +50,96 @@ export const ProcrastinationNudge: React.FC<ProcrastinationNudgeProps> = ({
   const [selectedOption, setSelectedOption] = useState<SelectedOption>(null);
   const [goodEnoughVersion, setGoodEnoughVersion] = useState('');
   const [newDeadline, setNewDeadline] = useState('');
+  const [mlRecommendation, setMLRecommendation] = useState<MLRecommendation | null>(null);
+  const [isLoadingML, setIsLoadingML] = useState(false);
   
   const startIntervention = useTherapyStore((state) => state.startIntervention);
   const completeIntervention = useTherapyStore((state) => state.completeIntervention);
+  const interventionHistory = useTherapyStore((state) => state.interventionHistory);
   
+  const behaviorPatterns = useMLStore((state) => state.behaviorPatterns);
+  const productivityScore = useMLStore((state) => state.productivityScore);
+
+  useEffect(() => {
+    if (visible && !mlRecommendation) {
+      generateMLRecommendation();
+    }
+  }, [visible]);
+
+  const generateMLRecommendation = async () => {
+    setIsLoadingML(true);
+    
+    try {
+      const completedInterventions = interventionHistory.filter(
+        (i) => i.status === 'completed'
+      );
+      
+      const outcomeStats = {
+        break_down: { success: 0, total: 0 },
+        lower_bar: { success: 0, total: 0 },
+        drop: { success: 0, total: 0 },
+        renegotiate: { success: 0, total: 0 },
+      };
+      
+      completedInterventions.forEach((intervention) => {
+        const outcome = intervention.outcome as keyof typeof outcomeStats;
+        if (outcome && outcomeStats[outcome]) {
+          outcomeStats[outcome].total++;
+          if (intervention.outcome !== 'dropped_task') {
+            outcomeStats[outcome].success++;
+          }
+        }
+      });
+      
+      const cognitiveLoad = behaviorPatterns?.cognitiveLoad || 0.5;
+      const currentEnergy = productivityScore || 50;
+      
+      let recommendation: MLRecommendation;
+      
+      if (overdueCount >= 3 && cognitiveLoad > 0.7) {
+        recommendation = {
+          recommendedOption: 'lower_bar',
+          confidence: 0.85,
+          reasoning: 'Based on your current energy levels and this task being overdue multiple times, simplifying might help.',
+          successRate: outcomeStats.lower_bar.total > 0 
+            ? (outcomeStats.lower_bar.success / outcomeStats.lower_bar.total) * 100 
+            : 72,
+        };
+      } else if (currentEnergy > 60 && overdueCount <= 2) {
+        recommendation = {
+          recommendedOption: 'break_down',
+          confidence: 0.78,
+          reasoning: 'You seem to have good energy right now. Breaking this into smaller steps often works well for you.',
+          successRate: outcomeStats.break_down.total > 0 
+            ? (outcomeStats.break_down.success / outcomeStats.break_down.total) * 100 
+            : 68,
+        };
+      } else if (overdueCount >= 5) {
+        recommendation = {
+          recommendedOption: 'drop',
+          confidence: 0.72,
+          reasoning: "This task has been overdue many times. It might be worth considering if it's still aligned with your goals.",
+          successRate: 85,
+        };
+      } else {
+        recommendation = {
+          recommendedOption: 'renegotiate',
+          confidence: 0.65,
+          reasoning: 'Setting a new realistic deadline might help you approach this fresh.',
+          successRate: outcomeStats.renegotiate.total > 0 
+            ? (outcomeStats.renegotiate.success / outcomeStats.renegotiate.total) * 100 
+            : 60,
+        };
+      }
+      
+      setMLRecommendation(recommendation);
+    } catch (error) {
+      console.error('ML recommendation error:', error);
+    } finally {
+      setIsLoadingML(false);
+    }
+  };
+
   const handleSelectOption = (option: SelectedOption) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedOption(option);
@@ -80,7 +176,26 @@ export const ProcrastinationNudge: React.FC<ProcrastinationNudgeProps> = ({
     setSelectedOption(null);
     setGoodEnoughVersion('');
     setNewDeadline('');
+    setMLRecommendation(null);
     onClose();
+  };
+
+  const isRecommended = (option: SelectedOption) => 
+    mlRecommendation?.recommendedOption === option;
+
+  const renderMLBadge = (option: SelectedOption) => {
+    if (!isRecommended(option)) return null;
+    
+    return (
+      <Animated.View 
+        entering={FadeIn.delay(300)}
+        style={styles.mlBadge}
+      >
+        <Text style={styles.mlBadgeText}>
+          ✨ Recommended ({Math.round(mlRecommendation!.confidence * 100)}% match)
+        </Text>
+      </Animated.View>
+    );
   };
   
   const renderOptionDetails = () => {
@@ -162,12 +277,41 @@ export const ProcrastinationNudge: React.FC<ProcrastinationNudgeProps> = ({
                 "{taskTitle}" has been overdue {overdueCount} times.
                 {'\n'}Let's figure out what to do with it.
               </Text>
+
+              {isLoadingML ? (
+                <View style={styles.mlLoadingContainer}>
+                  <ActivityIndicator size="small" color={colors.primary[500]} />
+                  <Text style={styles.mlLoadingText}>Analyzing your patterns...</Text>
+                </View>
+              ) : mlRecommendation && (
+                <Animated.View 
+                  entering={FadeInDown.delay(200)}
+                  style={styles.mlRecommendationBanner}
+                >
+                  <Text style={styles.mlRecommendationIcon}>🧠</Text>
+                  <View style={styles.mlRecommendationContent}>
+                    <Text style={styles.mlRecommendationTitle}>
+                      Personalized suggestion
+                    </Text>
+                    <Text style={styles.mlRecommendationText}>
+                      {mlRecommendation.reasoning}
+                    </Text>
+                    <Text style={styles.mlSuccessRate}>
+                      {Math.round(mlRecommendation.successRate)}% success rate for you
+                    </Text>
+                  </View>
+                </Animated.View>
+              )}
               
               <View style={styles.optionsContainer}>
                 <TouchableOpacity
-                  style={styles.optionCard}
+                  style={[
+                    styles.optionCard,
+                    isRecommended('break_down') && styles.recommendedOption,
+                  ]}
                   onPress={() => handleSelectOption('break_down')}
                 >
+                  {renderMLBadge('break_down')}
                   <Text style={styles.optionEmoji}>🧩</Text>
                   <View style={styles.optionContent}>
                     <Text style={styles.optionTitle}>Break it down</Text>
@@ -178,9 +322,13 @@ export const ProcrastinationNudge: React.FC<ProcrastinationNudgeProps> = ({
                 </TouchableOpacity>
                 
                 <TouchableOpacity
-                  style={styles.optionCard}
+                  style={[
+                    styles.optionCard,
+                    isRecommended('lower_bar') && styles.recommendedOption,
+                  ]}
                   onPress={() => handleSelectOption('lower_bar')}
                 >
+                  {renderMLBadge('lower_bar')}
                   <Text style={styles.optionEmoji}>📉</Text>
                   <View style={styles.optionContent}>
                     <Text style={styles.optionTitle}>Lower the bar</Text>
@@ -191,9 +339,13 @@ export const ProcrastinationNudge: React.FC<ProcrastinationNudgeProps> = ({
                 </TouchableOpacity>
                 
                 <TouchableOpacity
-                  style={styles.optionCard}
+                  style={[
+                    styles.optionCard,
+                    isRecommended('renegotiate') && styles.recommendedOption,
+                  ]}
                   onPress={() => handleSelectOption('renegotiate')}
                 >
+                  {renderMLBadge('renegotiate')}
                   <Text style={styles.optionEmoji}>📅</Text>
                   <View style={styles.optionContent}>
                     <Text style={styles.optionTitle}>Renegotiate deadline</Text>
@@ -204,9 +356,14 @@ export const ProcrastinationNudge: React.FC<ProcrastinationNudgeProps> = ({
                 </TouchableOpacity>
                 
                 <TouchableOpacity
-                  style={[styles.optionCard, styles.dropOption]}
+                  style={[
+                    styles.optionCard, 
+                    styles.dropOption,
+                    isRecommended('drop') && styles.recommendedDropOption,
+                  ]}
                   onPress={() => handleSelectOption('drop')}
                 >
+                  {renderMLBadge('drop')}
                   <Text style={styles.optionEmoji}>🗑️</Text>
                   <View style={styles.optionContent}>
                     <Text style={styles.optionTitle}>Consciously drop it</Text>
@@ -295,7 +452,7 @@ const styles = StyleSheet.create({
     color: colors.gray[600],
     textAlign: 'center',
     lineHeight: 24,
-    marginBottom: 32,
+    marginBottom: 24,
   },
   optionsContainer: {
     gap: 12,
@@ -308,6 +465,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray[50],
     borderWidth: 1,
     borderColor: colors.gray[200],
+    position: 'relative',
+    overflow: 'visible',
   },
   dropOption: {
     backgroundColor: colors.accent[50],
@@ -387,6 +546,74 @@ const styles = StyleSheet.create({
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: colors.gray[100],
+  },
+  mlLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  mlLoadingText: {
+    fontSize: 14,
+    color: colors.gray[500],
+  },
+  mlRecommendationBanner: {
+    flexDirection: 'row',
+    backgroundColor: colors.primary[50],
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  mlRecommendationIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  mlRecommendationContent: {
+    flex: 1,
+  },
+  mlRecommendationTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary[700],
+    marginBottom: 4,
+  },
+  mlRecommendationText: {
+    fontSize: 13,
+    color: colors.primary[600],
+    lineHeight: 18,
+  },
+  mlSuccessRate: {
+    fontSize: 12,
+    color: colors.primary[500],
+    marginTop: 6,
+    fontWeight: '500',
+  },
+  recommendedOption: {
+    borderColor: colors.primary[400],
+    borderWidth: 2,
+    backgroundColor: colors.primary[25] || '#F0F7FF',
+  },
+  recommendedDropOption: {
+    borderColor: colors.accent[400],
+    borderWidth: 2,
+  },
+  mlBadge: {
+    position: 'absolute',
+    top: -10,
+    right: 12,
+    backgroundColor: colors.primary[500],
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  mlBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
 

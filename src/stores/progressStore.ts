@@ -14,11 +14,42 @@ import {
   XP_REWARDS,
 } from '../types/progress';
 
+// Badge definitions
+const BADGES: Badge[] = [
+  // Task badges
+  { id: 'task_1', name: 'First Step', description: 'Complete your first task', icon: '🎯', category: 'tasks', criteriaType: 'count', criteriaValue: 1, criteriaMetric: 'tasksCompleted', rarity: 'common' },
+  { id: 'task_10', name: 'Getting Things Done', description: 'Complete 10 tasks', icon: '✅', category: 'tasks', criteriaType: 'count', criteriaValue: 10, criteriaMetric: 'tasksCompleted', rarity: 'common' },
+  { id: 'task_50', name: 'Task Master', description: 'Complete 50 tasks', icon: '🏆', category: 'tasks', criteriaType: 'count', criteriaValue: 50, criteriaMetric: 'tasksCompleted', rarity: 'uncommon' },
+  { id: 'task_100', name: 'Productivity Pro', description: 'Complete 100 tasks', icon: '💎', category: 'tasks', criteriaType: 'count', criteriaValue: 100, criteriaMetric: 'tasksCompleted', rarity: 'rare' },
+  { id: 'task_500', name: 'Task Legend', description: 'Complete 500 tasks', icon: '👑', category: 'tasks', criteriaType: 'count', criteriaValue: 500, criteriaMetric: 'tasksCompleted', rarity: 'legendary' },
+  
+  // Focus badges
+  { id: 'focus_30', name: 'Focus Initiate', description: 'Accumulate 30 focus minutes', icon: '⏱️', category: 'focus', criteriaType: 'count', criteriaValue: 30, criteriaMetric: 'focusMinutes', rarity: 'common' },
+  { id: 'focus_120', name: 'Deep Worker', description: 'Accumulate 2 hours of focus', icon: '🧠', category: 'focus', criteriaType: 'count', criteriaValue: 120, criteriaMetric: 'focusMinutes', rarity: 'uncommon' },
+  { id: 'focus_600', name: 'Focus Champion', description: 'Accumulate 10 hours of focus', icon: '🔥', category: 'focus', criteriaType: 'count', criteriaValue: 600, criteriaMetric: 'focusMinutes', rarity: 'rare' },
+  
+  // Habit badges
+  { id: 'habit_1', name: 'Habit Starter', description: 'Log your first habit', icon: '🌱', category: 'habits', criteriaType: 'count', criteriaValue: 1, criteriaMetric: 'habitsLogged', rarity: 'common' },
+  { id: 'habit_30', name: 'Habit Builder', description: 'Log 30 habits', icon: '🔄', category: 'habits', criteriaType: 'count', criteriaValue: 30, criteriaMetric: 'habitsLogged', rarity: 'uncommon' },
+  { id: 'habit_100', name: 'Habit Master', description: 'Log 100 habits', icon: '⭐', category: 'habits', criteriaType: 'count', criteriaValue: 100, criteriaMetric: 'habitsLogged', rarity: 'rare' },
+  
+  // Streak badges
+  { id: 'streak_3', name: 'On a Roll', description: 'Maintain a 3-day streak', icon: '🔥', category: 'streaks', criteriaType: 'count', criteriaValue: 3, criteriaMetric: 'currentStreak', rarity: 'common' },
+  { id: 'streak_7', name: 'Week Warrior', description: 'Maintain a 7-day streak', icon: '💪', category: 'streaks', criteriaType: 'count', criteriaValue: 7, criteriaMetric: 'currentStreak', rarity: 'uncommon' },
+  { id: 'streak_30', name: 'Monthly Master', description: 'Maintain a 30-day streak', icon: '🏅', category: 'streaks', criteriaType: 'count', criteriaValue: 30, criteriaMetric: 'currentStreak', rarity: 'epic' },
+  
+  // XP badges
+  { id: 'xp_500', name: 'XP Hunter', description: 'Earn 500 total XP', icon: '⚡', category: 'special', criteriaType: 'count', criteriaValue: 500, criteriaMetric: 'totalXp', rarity: 'common' },
+  { id: 'xp_2000', name: 'XP Collector', description: 'Earn 2000 total XP', icon: '💫', category: 'special', criteriaType: 'count', criteriaValue: 2000, criteriaMetric: 'totalXp', rarity: 'uncommon' },
+  { id: 'xp_10000', name: 'XP Master', description: 'Earn 10000 total XP', icon: '🌟', category: 'special', criteriaType: 'count', criteriaValue: 10000, criteriaMetric: 'totalXp', rarity: 'epic' },
+];
+
 interface ProgressState {
   progress: UserProgress | null;
   badges: Badge[];
   userBadges: UserBadge[];
   xpEvents: XPEvent[];
+  dailyXpGoal: number;
   isLoading: boolean;
   error: string | null;
 
@@ -29,6 +60,7 @@ interface ProgressState {
   updateStreak: () => Promise<void>;
   setProgressMetaphor: (metaphor: UserProgress['progressMetaphor']) => void;
   setPetInfo: (name: string, type: string) => void;
+  setDailyXpGoal: (goal: number) => void;
 
   // Selectors
   getLevel: () => number;
@@ -37,6 +69,7 @@ interface ProgressState {
   getNewBadges: () => UserBadge[];
   getTodayStats: () => DailyStats;
   getRecentXPEvents: (limit?: number) => XPEvent[];
+  getDailyXpProgress: () => { current: number; goal: number; percentage: number };
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -61,9 +94,10 @@ export const useProgressStore = create<ProgressState>()(
   persist(
     (set, get) => ({
       progress: null,
-      badges: [],
+      badges: BADGES,
       userBadges: [],
       xpEvents: [],
+      dailyXpGoal: 100,
       isLoading: false,
       error: null,
 
@@ -136,9 +170,38 @@ export const useProgressStore = create<ProgressState>()(
       },
 
       checkBadges: async () => {
-        // TODO: Implement badge checking logic
-        // Would check progress against badge criteria and award new badges
-        return [];
+        const { progress, userBadges, badges } = get();
+        if (!progress) return [];
+
+        const newBadges: UserBadge[] = [];
+        const earnedBadgeIds = userBadges.map((ub) => ub.badgeId);
+
+        for (const badge of badges) {
+          if (earnedBadgeIds.includes(badge.id)) continue;
+
+          // Get the metric value from progress
+          const metricValue = progress[badge.criteriaMetric as keyof UserProgress] as number;
+          
+          if (metricValue >= badge.criteriaValue) {
+            const newUserBadge: UserBadge = {
+              id: generateId(),
+              userId: progress.userId,
+              badgeId: badge.id,
+              badge,
+              earnedAt: new Date().toISOString(),
+              isNew: true,
+            };
+            newBadges.push(newUserBadge);
+          }
+        }
+
+        if (newBadges.length > 0) {
+          set((state) => ({
+            userBadges: [...state.userBadges, ...newBadges],
+          }));
+        }
+
+        return newBadges;
       },
 
       updateStreak: async () => {
@@ -215,6 +278,10 @@ export const useProgressStore = create<ProgressState>()(
         });
       },
 
+      setDailyXpGoal: (goal) => {
+        set({ dailyXpGoal: goal });
+      },
+
       // Selectors
       getLevel: () => get().progress?.level || 1,
 
@@ -256,6 +323,21 @@ export const useProgressStore = create<ProgressState>()(
 
       getRecentXPEvents: (limit = 10) =>
         get().xpEvents.slice(0, limit),
+
+      getDailyXpProgress: () => {
+        const today = new Date().toISOString().split('T')[0];
+        const todayEvents = get().xpEvents.filter((e) =>
+          e.timestamp.startsWith(today)
+        );
+        const current = todayEvents.reduce((sum, e) => sum + e.amount, 0);
+        const goal = get().dailyXpGoal;
+        
+        return {
+          current,
+          goal,
+          percentage: Math.min((current / goal) * 100, 100),
+        };
+      },
     }),
     {
       name: 'progress-storage',
@@ -264,6 +346,7 @@ export const useProgressStore = create<ProgressState>()(
         progress: state.progress,
         userBadges: state.userBadges,
         xpEvents: state.xpEvents.slice(0, 50), // Only persist last 50 events
+        dailyXpGoal: state.dailyXpGoal,
       }),
     }
   )
