@@ -1,12 +1,48 @@
 import { Router, Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 import { validate } from '../middleware/validation.js';
 import { prisma } from '../lib/prisma.js';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 import { transcriptionService } from '../services/transcription.js';
 
 const router = Router();
+
+// Configure multer for voice file uploads
+const uploadsDir = path.join(process.cwd(), 'uploads', 'voice');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
+    const ext = path.extname(file.originalname) || '.m4a';
+    cb(null, `voice-${uniqueSuffix}${ext}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 25 * 1024 * 1024, // 25MB max file size
+  },
+  fileFilter: (_req, file, cb) => {
+    // Accept audio files
+    const allowedMimes = ['audio/m4a', 'audio/mp4', 'audio/aac', 'audio/wav', 'audio/webm', 'audio/x-m4a'];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only audio files are allowed.'));
+    }
+  },
+});
 
 const cleanupSchema = z.object({
   body: z.object({
@@ -224,6 +260,37 @@ router.get('/transcription/status', authMiddleware, async (_req: AuthenticatedRe
     configured: transcriptionService.isConfigured(),
     provider: 'openai-whisper',
   });
+});
+
+// POST /captures/upload-voice - Upload voice recording file
+router.post('/upload-voice', authMiddleware, upload.single('audio'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const file = (req as any).file;
+    const duration = parseInt((req.body.duration as string) || '0');
+
+    if (!file) {
+      res.status(400).json({ error: 'No audio file provided' });
+      return;
+    }
+
+    // Construct the file URL
+    // In production, this would be a public URL from your storage service (S3, Cloudflare R2, etc.)
+    // For local development, use the file path (you'd need to serve static files)
+    const baseUrl = process.env['API_BASE_URL'] || `http://localhost:${process.env['PORT'] || 3000}`;
+    const voiceUrl = `${baseUrl}/api/uploads/voice/${file.filename}`;
+
+    res.json({
+      success: true,
+      data: {
+        url: voiceUrl,
+        fileId: file.filename,
+        duration,
+      },
+    });
+  } catch (error) {
+    console.error('Error uploading voice file:', error);
+    res.status(500).json({ error: 'Failed to upload voice file' });
+  }
 });
 
 // Apply AI cleanup mode + discount metadata

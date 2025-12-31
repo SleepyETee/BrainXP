@@ -152,10 +152,14 @@ export default function CognitiveScreen() {
               style={styles.exerciseCard}
               onPress={() => {
                 if (exercise.id === 'working_memory_steps') {
-                  // This is integrated into focus sessions
+                  // Working memory is integrated into focus sessions
                   router.push('/focus/setup');
-                } else {
-                  // Show coming soon for other exercises
+                } else if (exercise.id === 'attention_switching') {
+                  // Navigate to attention switching exercise
+                  router.push('/therapy/exercises/attention-switch');
+                } else if (exercise.id === 'planning_sequence') {
+                  // Navigate to planning exercise
+                  router.push('/therapy/exercises/plan-builder');
                 }
               }}
             >

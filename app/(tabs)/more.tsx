@@ -72,6 +72,26 @@ export default function MoreScreen() {
     );
   };
 
+  const handleHelpFAQ = () => {
+    router.push('/support/help');
+  };
+
+  const handleFeedback = () => {
+    router.push('/support/feedback');
+  };
+
+  const handlePrivacyPolicy = () => {
+    router.push('/support/privacy');
+  };
+
+  const handleTermsOfService = () => {
+    router.push('/support/terms');
+  };
+
+  const handleExportData = () => {
+    router.push('/support/export');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -104,128 +124,46 @@ export default function MoreScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* AI Tools - NEW */}
+        {/* Quick Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🤖 AI Tools</Text>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={styles.menuGroup}>
             <MenuItem
               icon="🪄"
-              title="Magic Breakdown"
-              subtitle="Break tasks into tiny steps"
-              onPress={() => router.push('/tools/magic')}
+              title="AI Tools"
+              subtitle="Magic breakdown, spoon estimator & more"
+              onPress={() => router.push('/tools')}
               badge="NEW"
             />
-            <MenuItem
-              icon="🥄"
-              title="Spoon Estimator"
-              subtitle="Estimate task energy cost"
-              onPress={() => router.push('/tools/spoons')}
-            />
-            <MenuItem
-              icon="✍️"
-              title="Tone Rewriter"
-              subtitle="Transform text to any tone"
-              onPress={() => router.push('/tools/tone')}
-            />
-            <MenuItem
-              icon="📝"
-              title="Note Compiler"
-              subtitle="Combine scattered notes"
-              onPress={() => router.push('/tools/compile')}
-            />
-            <MenuItem
-              icon="🤖"
-              title="All AI Tools"
-              subtitle="View all productivity tools"
-              onPress={() => router.push('/tools')}
-            />
-          </View>
-        </View>
-
-        {/* Study Hub - NEW */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📚 Learning</Text>
-          <View style={styles.menuGroup}>
             <MenuItem
               icon="🎴"
-              title="Flashcards"
-              subtitle="Study with spaced repetition"
-              onPress={() => router.push('/study')}
-              badge="NEW"
-            />
-            <MenuItem
-              icon="📋"
-              title="Quizzes"
-              subtitle="Test your knowledge"
+              title="Study Hub"
+              subtitle="Flashcards & quizzes"
               onPress={() => router.push('/study')}
             />
-            <MenuItem
-              icon="🤖"
-              title="AI Generate Cards"
-              subtitle="Create flashcards from any content"
-              onPress={() => router.push('/study/generate')}
-            />
-          </View>
-        </View>
-
-        {/* Main Menu */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Features</Text>
-          <View style={styles.menuGroup}>
             <MenuItem
               icon="📊"
               title="Analytics"
-              subtitle="View your progress and insights"
+              subtitle="View your progress"
               onPress={() => router.push('/analytics')}
             />
             <MenuItem
-              icon="🏆"
-              title="Achievements"
-              subtitle="Badges and milestones"
-              onPress={() => router.push('/analytics')}
-              badge={String(progress?.tasksCompleted || 0)}
-            />
-            <MenuItem
-              icon="📝"
-              title="Daily Planning"
-              subtitle="Plan your day with 1-3-5 rule"
-              onPress={() => router.push('/planning')}
-            />
-            <MenuItem
-              icon="😊"
+              icon=""
               title="Wellness"
-              subtitle="Mood tracking and breathing exercises"
+              subtitle="Mood & breathing exercises"
               onPress={() => router.push('/wellness/mood')}
             />
           </View>
         </View>
 
-        {/* Settings Menu */}
+        {/* Settings */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Settings</Text>
           <View style={styles.menuGroup}>
             <MenuItem
-              icon="🎨"
-              title="Appearance"
-              subtitle={`Theme: ${settings.theme}`}
-              onPress={toggleTheme}
-            />
-            <MenuItem
-              icon="🔔"
-              title="Notifications"
-              subtitle={settings.notificationsEnabled ? 'Enabled' : 'Disabled'}
-              onPress={() => router.push('/settings')}
-            />
-            <MenuItem
-              icon="⏱️"
-              title="Focus Settings"
-              subtitle={`Default: ${settings.defaultFocusDuration} min`}
-              onPress={() => router.push('/settings')}
-            />
-            <MenuItem
-              icon="🎮"
-              title="Gamification"
-              subtitle={`Progress style: ${settings.progressMetaphor}`}
+              icon="⚙️"
+              title="All Settings"
+              subtitle="Appearance, notifications, focus & more"
               onPress={() => router.push('/settings')}
             />
           </View>
@@ -238,22 +176,22 @@ export default function MoreScreen() {
             <MenuItem
               icon="❓"
               title="Help & FAQ"
-              onPress={() => {}}
+              onPress={handleHelpFAQ}
             />
             <MenuItem
               icon="💬"
               title="Send Feedback"
-              onPress={() => {}}
+              onPress={handleFeedback}
             />
             <MenuItem
               icon="📄"
               title="Privacy Policy"
-              onPress={() => {}}
+              onPress={handlePrivacyPolicy}
             />
             <MenuItem
               icon="📜"
               title="Terms of Service"
-              onPress={() => {}}
+              onPress={handleTermsOfService}
             />
           </View>
         </View>
@@ -265,7 +203,7 @@ export default function MoreScreen() {
               icon="📤"
               title="Export Data"
               subtitle="Download your data"
-              onPress={() => {}}
+              onPress={handleExportData}
             />
             <MenuItem
               icon="🚪"

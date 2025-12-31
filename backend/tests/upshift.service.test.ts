@@ -38,3 +38,4 @@ test('send posts envelope via fetch with auth header', async () => {
 
   global.fetch = originalFetch;
 });
+

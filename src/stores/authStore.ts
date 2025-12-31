@@ -9,12 +9,15 @@ interface AuthState {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isGuest: boolean;
   error: string | null;
   onboardingData: OnboardingData;
 
   // Actions
   login: (input: LoginInput) => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
+  loginAsGuest: () => Promise<void>;
+  convertGuestToAccount: (input: RegisterInput) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
   updateSettings: (settings: Partial<UserSettings>) => Promise<void>;
@@ -43,12 +46,15 @@ const defaultSettings: UserSettings = {
   analyticsEnabled: true,
 };
 
+const generateGuestId = () => `guest-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       user: null,
       isLoading: false,
       isAuthenticated: false,
+      isGuest: false,
       error: null,
       onboardingData: {},
 
@@ -69,7 +75,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         try {
           const { user } = await apiRegister(input);
-          set({ user, isAuthenticated: true, isLoading: false });
+          set({ user, isAuthenticated: true, isGuest: false, isLoading: false });
           void syncUser(user);
           void syncGoals();
         } catch (error) {
@@ -78,19 +84,88 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      logout: async () => {
-        set({ isLoading: true });
+      loginAsGuest: async () => {
+        set({ isLoading: true, error: null });
         try {
-          await apiLogout();
-          set({
-            user: null,
-            isAuthenticated: false,
-            isLoading: false,
-            onboardingData: {},
+          // Create a local guest user (no API call needed)
+          const guestUser: User = {
+            id: generateGuestId(),
+            email: '',
+            name: 'Guest',
+            settings: defaultSettings,
+            createdAt: new Date().toISOString(),
+            isGuest: true,
+          };
+          
+          set({ 
+            user: guestUser, 
+            isAuthenticated: true, 
+            isGuest: true, 
+            isLoading: false 
           });
         } catch (error) {
           set({ error: (error as Error).message, isLoading: false });
           throw error;
+        }
+      },
+
+      convertGuestToAccount: async (input) => {
+        const { user, isGuest } = get();
+        if (!user || !isGuest) {
+          throw new Error('No guest session to convert');
+        }
+
+        set({ isLoading: true, error: null });
+        try {
+          // Register the account with the guest's existing data
+          const { user: newUser } = await apiRegister(input);
+          
+          // Merge guest data with new account
+          const mergedUser: User = {
+            ...newUser,
+            // Preserve guest's settings preferences
+            settings: { ...defaultSettings, ...user.settings, ...newUser.settings },
+          };
+          
+          set({ 
+            user: mergedUser, 
+            isAuthenticated: true, 
+            isGuest: false, 
+            isLoading: false 
+          });
+          
+          void syncUser(mergedUser);
+          void syncGoals();
+        } catch (error) {
+          set({ error: (error as Error).message, isLoading: false });
+          throw error;
+        }
+      },
+
+      logout: async () => {
+        const { isGuest } = get();
+        set({ isLoading: true });
+        try {
+          // Only call API logout for non-guest users
+          if (!isGuest) {
+            await apiLogout().catch(() => {});
+          }
+          set({
+            user: null,
+            isAuthenticated: false,
+            isGuest: false,
+            isLoading: false,
+            onboardingData: {},
+          });
+        } catch (error) {
+          // Even if logout fails, clear local state
+          set({ 
+            user: null,
+            isAuthenticated: false,
+            isGuest: false,
+            error: (error as Error).message, 
+            isLoading: false 
+          });
         }
       },
 
@@ -166,6 +241,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         isAuthenticated: state.isAuthenticated,
+        isGuest: state.isGuest,
       }),
     }
   )

@@ -15,6 +15,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { colors, gradients, shadows } from '../../src/theme/colors';
+import { generateQuiz } from '../../src/services/api/aiTools';
+import { GeneratedQuizQuestion, QuizGeneratorOutput } from '../../src/types/aiTools';
 
 interface QuizQuestion {
   id: string;
@@ -22,6 +24,8 @@ interface QuizQuestion {
   options: string[];
   correctIndex: number;
   explanation?: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  topic?: string;
 }
 
 export default function QuizGeneratorScreen() {
@@ -44,37 +48,43 @@ export default function QuizGeneratorScreen() {
       return;
     }
 
+    if (content.trim().length < 50) {
+      setError('Please enter more content (at least 50 characters) for better quiz questions');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
-      // Simulate AI generation (replace with actual API call)
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Call actual API to generate quiz
+      const result: QuizGeneratorOutput = await generateQuiz({
+        content: content.trim(),
+        questionCount,
+        questionTypes: ['multiple_choice'],
+        difficulty: 'medium',
+        includeExplanations: true,
+      });
       
-      // Generate mock questions
-      const mockQuestions: QuizQuestion[] = [];
-      for (let i = 0; i < questionCount; i++) {
-        mockQuestions.push({
-          id: `q-${i}`,
-          question: `Question ${i + 1}: What is an important concept from the provided content?`,
-          options: [
-            'Option A - Correct answer',
-            'Option B - Incorrect',
-            'Option C - Incorrect',
-            'Option D - Incorrect',
-          ],
-          correctIndex: 0,
-          explanation: 'This is the correct answer because it directly relates to the key concept.',
-        });
-      }
+      // Convert API response to local QuizQuestion format
+      const convertedQuestions: QuizQuestion[] = result.questions.map((q: GeneratedQuizQuestion) => ({
+        id: q.id,
+        question: q.question,
+        options: q.options || [q.correctAnswer, 'Incorrect option 1', 'Incorrect option 2', 'Incorrect option 3'],
+        correctIndex: q.correctIndex ?? 0,
+        explanation: q.explanation,
+        difficulty: q.difficulty,
+        topic: q.topic,
+      }));
       
-      setQuestions(mockQuestions);
+      setQuestions(convertedQuestions);
       setCurrentQuestion(0);
       setScore(0);
       setSelectedAnswer(null);
       setShowResult(false);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
+      console.error('Quiz generation error:', err);
       setError('Failed to generate quiz. Please try again.');
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {

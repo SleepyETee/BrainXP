@@ -107,6 +107,15 @@ export interface SpoonEstimatorOutput {
     bestApproach?: string;
   };
   adjustedSuggestion?: string;
+  // ML-enhanced properties
+  mlEnhanced?: boolean;
+  confidence?: number;
+  basedOnHistory?: number;
+  mlAdjustments?: {
+    factor: string;
+    adjustment: number;
+    reason: string;
+  }[];
 }
 
 export interface CompilerInput {
@@ -140,7 +149,7 @@ export interface QuizGeneratorInput {
   includeExplanations?: boolean;
 }
 
-export interface QuizQuestion {
+export interface GeneratedQuizQuestion {
   id: string;
   type: 'multiple_choice' | 'true_false' | 'short_answer';
   question: string;
@@ -154,7 +163,7 @@ export interface QuizQuestion {
 }
 
 export interface QuizGeneratorOutput {
-  questions: QuizQuestion[];
+  questions: GeneratedQuizQuestion[];
   metadata: {
     totalQuestions: number;
     byDifficulty: { easy: number; medium: number; hard: number };
@@ -174,7 +183,7 @@ export interface FlashcardGeneratorInput {
   difficulty?: 'easy' | 'medium' | 'hard';
 }
 
-export interface Flashcard {
+export interface GeneratedFlashcard {
   id: string;
   front: string;
   back: string;
@@ -185,7 +194,7 @@ export interface Flashcard {
 }
 
 export interface FlashcardGeneratorOutput {
-  flashcards: Flashcard[];
+  flashcards: GeneratedFlashcard[];
   metadata: {
     totalCards: number;
     topicsCount: number;
@@ -302,6 +311,9 @@ export interface MagicBreakdownResult {
     message: string;
     emoji: string;
   }[];
+  // ML-enhanced properties
+  mlEnhanced?: boolean;
+  personalizedInsights?: string[];
 }
 
 // Tone Analysis types
@@ -321,6 +333,17 @@ export interface TimeEstimate {
   personalRatio?: number;
   breakdown?: { phase: string; minutes: number; description: string }[];
   tips?: string[];
+  // ML-enhanced properties
+  mlEnhanced?: boolean;
+  mlConfidence?: number;
+  basedOnHistory?: number;
+  mlAdjustedMinutes?: number;
+  accuracyFactor?: number;
+  mlBreakdown?: {
+    phase: string;
+    minutes: number;
+    basedOn: string;
+  }[];
 }
 
 export interface EstimateTimeInput {

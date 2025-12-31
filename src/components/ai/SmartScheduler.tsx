@@ -37,7 +37,7 @@ export const SmartScheduler: React.FC<SmartSchedulerProps> = ({
   taskType = 'any',
   showHeader = true,
 }) => {
-  const { patterns, isLearning } = useMLStore();
+  const { patterns, isLoadingPatterns } = useMLStore();
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
 
@@ -141,7 +141,7 @@ export const SmartScheduler: React.FC<SmartSchedulerProps> = ({
     }
   };
 
-  if (isLearning) {
+  if (isLoadingPatterns && !patterns) {
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingEmoji}>🤖</Text>

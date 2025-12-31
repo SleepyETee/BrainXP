@@ -17,6 +17,34 @@ import {
   QuizGeneratorInput,
   QuizGeneratorOutput,
 } from '../../types/aiTools';
+import {
+  mockEstimateSpoons,
+  mockRewriteTone,
+  mockCompileNotes,
+  mockEstimateTime,
+  mockMagicBreakdown,
+  mockGenerateFlashcards,
+  mockGenerateQuiz,
+} from './mockAiTools';
+
+// Flag to control offline/mock mode
+const USE_MOCK_FALLBACK = true;
+
+// Helper to wrap API calls with mock fallback
+async function withMockFallback<T>(
+  apiCall: () => Promise<T>,
+  mockCall: () => Promise<T>
+): Promise<T> {
+  try {
+    return await apiCall();
+  } catch (error) {
+    if (USE_MOCK_FALLBACK) {
+      console.log('API unavailable, using mock fallback');
+      return await mockCall();
+    }
+    throw error;
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SPOON/ENERGY ESTIMATOR
@@ -25,11 +53,16 @@ import {
 export const estimateSpoons = async (
   input: EstimateSpoonInput
 ): Promise<SpoonEstimate> => {
-  const response = await apiClient.post<ApiResponse<SpoonEstimate>>(
-    '/ai-tools/estimate-spoons',
-    input
+  return withMockFallback(
+    async () => {
+      const response = await apiClient.post<ApiResponse<SpoonEstimate>>(
+        '/ai-tools/estimate-spoons',
+        input
+      );
+      return response.data.data;
+    },
+    () => mockEstimateSpoons(input)
   );
-  return response.data.data;
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -39,19 +72,33 @@ export const estimateSpoons = async (
 export const rewriteTone = async (
   input: RewriteToneInput
 ): Promise<RewriteResult> => {
-  const response = await apiClient.post<ApiResponse<RewriteResult>>(
-    '/ai-tools/rewrite-tone',
-    input
+  return withMockFallback(
+    async () => {
+      const response = await apiClient.post<ApiResponse<RewriteResult>>(
+        '/ai-tools/rewrite-tone',
+        input
+      );
+      return response.data.data;
+    },
+    () => mockRewriteTone(input)
   );
-  return response.data.data;
 };
 
 export const analyzeTone = async (text: string): Promise<ToneAnalysis> => {
-  const response = await apiClient.post<ApiResponse<ToneAnalysis>>(
-    '/ai-tools/analyze-tone',
-    { text }
+  return withMockFallback(
+    async () => {
+      const response = await apiClient.post<ApiResponse<ToneAnalysis>>(
+        '/ai-tools/analyze-tone',
+        { text }
+      );
+      return response.data.data;
+    },
+    async () => ({
+      tone: 'professional' as const,
+      confidence: 0.7,
+      suggestions: ['Consider the context when interpreting tone'],
+    })
   );
-  return response.data.data;
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -61,11 +108,16 @@ export const analyzeTone = async (text: string): Promise<ToneAnalysis> => {
 export const compileNotes = async (
   input: CompileInput
 ): Promise<CompileResult> => {
-  const response = await apiClient.post<ApiResponse<CompileResult>>(
-    '/ai-tools/compile-notes',
-    input
+  return withMockFallback(
+    async () => {
+      const response = await apiClient.post<ApiResponse<CompileResult>>(
+        '/ai-tools/compile-notes',
+        input
+      );
+      return response.data.data;
+    },
+    () => mockCompileNotes(input)
   );
-  return response.data.data;
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -75,11 +127,16 @@ export const compileNotes = async (
 export const estimateTime = async (
   input: EstimateTimeInput
 ): Promise<TimeEstimate> => {
-  const response = await apiClient.post<ApiResponse<TimeEstimate>>(
-    '/ai-tools/estimate-time',
-    input
+  return withMockFallback(
+    async () => {
+      const response = await apiClient.post<ApiResponse<TimeEstimate>>(
+        '/ai-tools/estimate-time',
+        input
+      );
+      return response.data.data;
+    },
+    () => mockEstimateTime(input)
   );
-  return response.data.data;
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -89,11 +146,16 @@ export const estimateTime = async (
 export const magicBreakdown = async (
   input: MagicBreakdownInput
 ): Promise<MagicBreakdownResult> => {
-  const response = await apiClient.post<ApiResponse<MagicBreakdownResult>>(
-    '/ai-tools/magic-breakdown',
-    input
+  return withMockFallback(
+    async () => {
+      const response = await apiClient.post<ApiResponse<MagicBreakdownResult>>(
+        '/ai-tools/magic-breakdown',
+        input
+      );
+      return response.data.data;
+    },
+    () => mockMagicBreakdown(input)
   );
-  return response.data.data;
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -103,11 +165,16 @@ export const magicBreakdown = async (
 export const generateFlashcards = async (
   input: FlashcardGeneratorInput
 ): Promise<FlashcardGeneratorOutput> => {
-  const response = await apiClient.post<ApiResponse<FlashcardGeneratorOutput>>(
-    '/ai-tools/generate-flashcards',
-    input
+  return withMockFallback(
+    async () => {
+      const response = await apiClient.post<ApiResponse<FlashcardGeneratorOutput>>(
+        '/ai-tools/generate-flashcards',
+        input
+      );
+      return response.data.data;
+    },
+    () => mockGenerateFlashcards(input)
   );
-  return response.data.data;
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -117,9 +184,15 @@ export const generateFlashcards = async (
 export const generateQuiz = async (
   input: QuizGeneratorInput
 ): Promise<QuizGeneratorOutput> => {
-  const response = await apiClient.post<ApiResponse<QuizGeneratorOutput>>(
-    '/ai-tools/generate-quiz',
-    input
+  return withMockFallback(
+    async () => {
+      const response = await apiClient.post<ApiResponse<QuizGeneratorOutput>>(
+        '/ai-tools/generate-quiz',
+        input
+      );
+      return response.data.data;
+    },
+    () => mockGenerateQuiz(input)
   );
-  return response.data.data;
 };
+

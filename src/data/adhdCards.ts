@@ -293,3 +293,4 @@ export const getCategoryCounts = (): Record<ADHDCardCategory, number> => {
   });
   return counts as Record<ADHDCardCategory, number>;
 };
+

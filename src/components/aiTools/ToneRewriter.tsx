@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
   },
   toneOptionSuggested: {
     borderColor: colors.primary[300],
-    backgroundColor: colors.primary[25] || colors.primary[50],
+    backgroundColor: colors.primary[50],
   },
   suggestedDot: {
     position: 'absolute',
@@ -769,3 +769,4 @@ const styles = StyleSheet.create({
 });
 
 export default ToneRewriter;
+

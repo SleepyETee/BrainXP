@@ -20,6 +20,7 @@ export interface CaptureItem {
   aiSuggestion?: AISuggestion;
   capturedAt: string;
   source: 'app' | 'widget' | 'share' | 'notification';
+  transcriptionConfidence?: number; // Voice transcription confidence score
 }
 
 export interface LinkMetadata {

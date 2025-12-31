@@ -77,7 +77,7 @@ export const FocusSessionPlanner: React.FC<FocusSessionPlannerProps> = ({
     if (currentProductivity && currentProductivity.productivity >= bestHour.productivity * 0.8) {
       return { type: 'optimal', message: '🎯 Great timing! This is one of your peak focus hours.' };
     } else if (bestHour) {
-      const formatHour = (h: number) => h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm` : `${h - 12}pm`;
+      const formatHour = (h: number) => h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
       return { type: 'suggestion', message: `💡 Your peak focus is usually around ${formatHour(bestHour.hour)}` };
     }
     return null;

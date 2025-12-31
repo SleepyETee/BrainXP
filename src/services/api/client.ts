@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { ApiError } from '../../types';
+import { useAuthStore } from '../../stores/authStore';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
 const AUTH_TOKEN_KEY = 'auth_token';
@@ -40,9 +41,10 @@ apiClient.interceptors.response.use(
 
     // Handle 401 unauthorized
     if (error.response?.status === 401) {
-      // Clear token and redirect to login
+      // Clear token and trigger logout in auth store
       await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
-      // TODO: Trigger logout in auth store
+      // Trigger logout - this will clear user state and redirect to login
+      useAuthStore.getState().logout();
     }
 
     // Handle network errors

@@ -69,76 +69,63 @@ export const NoteCompiler: React.FC<NoteCompilerProps> = ({
           let reason = '';
           let confidence = 0.5;
 
-          // Check productivity patterns
-          if (userPatterns.productivity) {
-            const { preferredTaskTypes, averageSessionDuration } = userPatterns.productivity;
-            
-            // Task-focused users prefer action items
-            if (preferredTaskTypes?.includes('quick') || preferredTaskTypes?.includes('todo')) {
-              suggested = 'action_items';
-              reason = 'You tend to focus on actionable tasks';
+          // Use actual available properties from UserPatterns
+          
+          // Check average task duration for format preference
+          if (userPatterns.averageTaskDuration) {
+            if (userPatterns.averageTaskDuration < 15) {
+              suggested = 'bullets';
+              reason = 'Quick bullet points match your short task style';
               confidence = 0.75;
-            }
-            
-            // Users with longer sessions might prefer detailed formats
-            if (averageSessionDuration && averageSessionDuration > 30) {
+            } else if (userPatterns.averageTaskDuration > 30) {
               suggested = 'study_guide';
-              reason = 'Your longer work sessions benefit from structured guides';
+              reason = 'Detailed guides work well for your longer sessions';
               confidence = 0.7;
             }
           }
 
-          // Check learning patterns
-          if (userPatterns.learning) {
-            const { preferredStudyMethod, retentionStrength } = userPatterns.learning;
-            
-            if (preferredStudyMethod === 'reading' || preferredStudyMethod === 'notes') {
-              suggested = 'summary';
-              reason = 'Summaries align with your reading-focused learning style';
-              confidence = 0.8;
-            }
-            
-            if (retentionStrength === 'visual') {
-              suggested = 'outline';
-              reason = 'Visual hierarchies help your retention';
-              confidence = 0.75;
-            }
+          // Use preferred task size
+          if (userPatterns.preferredTaskSize === 'micro') {
+            suggested = 'action_items';
+            reason = 'Micro tasks work best as actionable items';
+            confidence = 0.8;
+          } else if (userPatterns.preferredTaskSize === 'large') {
+            suggested = 'outline';
+            reason = 'Large tasks need structured outlines';
+            confidence = 0.75;
           }
 
-          // Check ADHD patterns for quick processing
-          if (userPatterns.adhd) {
-            const { taskCompletionRate, averageTaskDuration } = userPatterns.adhd;
+          // Check peak energy time for format complexity
+          if (userPatterns.peakEnergyTime === 'morning') {
+            suggested = 'summary';
+            reason = 'Morning energy is great for processing summaries';
+            confidence = 0.7;
+          }
+
+          // Use insights to determine format
+          if (userPatterns.insights && userPatterns.insights.length > 0) {
+            const insightText = userPatterns.insights.join(' ').toLowerCase();
             
-            if (taskCompletionRate && taskCompletionRate < 0.6) {
+            if (insightText.includes('quick') || insightText.includes('fast')) {
               suggested = 'bullets';
-              reason = 'Bullet points are easier to scan and process';
+              reason = 'Based on your quick processing preference';
+              confidence = 0.75;
+            }
+            
+            if (insightText.includes('detail') || insightText.includes('thorough')) {
+              suggested = 'outline';
+              reason = 'You prefer detailed, thorough organization';
               confidence = 0.8;
             }
             
-            if (averageTaskDuration && averageTaskDuration < 15) {
+            if (insightText.includes('action') || insightText.includes('task')) {
               suggested = 'action_items';
-              reason = 'Quick action items match your task style';
-              confidence = 0.75;
+              reason = 'You focus on actionable outcomes';
+              confidence = 0.8;
             }
           }
 
-          // Get ML recommendations if available
-          try {
-            const recommendations = await getRecommendations('note_compiler');
-            if (recommendations?.preferredFormat) {
-              suggested = recommendations.preferredFormat as CompileFormat;
-              reason = recommendations.reason || 'Based on your usage patterns';
-              confidence = recommendations.confidence || 0.7;
-            }
-            
-            // Track format usage history
-            if (recommendations?.formatHistory) {
-              setFormatUsageHistory(new Map(Object.entries(recommendations.formatHistory) as [CompileFormat, number][]));
-            }
-          } catch {
-            // Use pattern-based recommendation
-          }
-
+          // Only set recommendation if confidence is high enough
           if (confidence > 0.6) {
             setMlRecommendation({ suggestedFormat: suggested, reason, confidence });
           }
@@ -179,11 +166,11 @@ export const NoteCompiler: React.FC<NoteCompilerProps> = ({
       
       // Track usage for ML (fire and forget)
       try {
-        await submitFeedback({
-          toolUsageId: usageId,
-          toolType: 'note_compiler',
-          action: 'compile',
-          metadata: {
+        await submitFeedback(
+          usageId,
+          true,
+          undefined,
+          {
             format: selectedFormat,
             noteCount: filledNotes.length,
             totalCharacters: filledNotes.reduce((sum, n) => sum + n.length, 0),
@@ -193,8 +180,8 @@ export const NoteCompiler: React.FC<NoteCompilerProps> = ({
             keyTopicsCount: compileResult.keyTopics.length,
             actionItemsCount: compileResult.actionItems?.length || 0,
             usedRecommendation: mlRecommendation?.suggestedFormat === selectedFormat,
-          },
-        });
+          }
+        );
       } catch {
         // Don't fail on ML tracking errors
       }
@@ -216,16 +203,15 @@ export const NoteCompiler: React.FC<NoteCompilerProps> = ({
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
     try {
-      await submitFeedback({
+      await submitFeedback(
         toolUsageId,
-        toolType: 'note_compiler',
-        rating: 5,
-        wasHelpful: true,
-        metadata: {
+        true,
+        undefined,
+        {
           format: selectedFormat,
           feedbackType: 'positive',
-        },
-      });
+        }
+      );
     } catch {
       // Silent fail
     }
@@ -238,16 +224,15 @@ export const NoteCompiler: React.FC<NoteCompilerProps> = ({
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
     try {
-      await submitFeedback({
+      await submitFeedback(
         toolUsageId,
-        toolType: 'note_compiler',
-        rating: 2,
-        wasHelpful: false,
-        metadata: {
+        false,
+        undefined,
+        {
           format: selectedFormat,
           feedbackType: 'negative',
-        },
-      });
+        }
+      );
     } catch {
       // Silent fail
     }
@@ -655,7 +640,7 @@ const styles = StyleSheet.create({
   // Format option enhancements
   formatOptionRecommended: {
     borderColor: colors.primary[400],
-    backgroundColor: colors.primary[25],
+    backgroundColor: colors.primary[50],
   },
   recommendedBadge: {
     position: 'absolute',
@@ -1052,3 +1037,4 @@ const styles = StyleSheet.create({
 });
 
 export default NoteCompiler;
+

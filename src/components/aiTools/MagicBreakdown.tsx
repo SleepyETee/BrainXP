@@ -318,14 +318,15 @@ export const MagicBreakdown: React.FC<MagicBreakdownProps> = ({
 
           {/* Personalized Insights */}
           {result.personalizedInsights && result.personalizedInsights.length > 0 && (
-            <View style={styles.insightsContainer}>
-              {result.personalizedInsights.map((insight, idx) => (
-                <View key={idx} style={styles.insightItem}>
-                  <Text style={styles.insightIcon}>💡</Text>
+            <Animated.View entering={FadeInDown.delay(300)} style={styles.insightsCard}>
+              <Text style={styles.insightsTitle}>🧠 Personalized Insights</Text>
+              {result.personalizedInsights.map((insight: string, idx: number) => (
+                <View key={idx} style={styles.insightRow}>
+                  <Text style={styles.insightBullet}>💡</Text>
                   <Text style={styles.insightText}>{insight}</Text>
                 </View>
               ))}
-            </View>
+            </Animated.View>
           )}
 
           {/* Progress Tracker */}
@@ -547,31 +548,40 @@ const styles = StyleSheet.create({
   },
   resultTitle: { fontSize: 14, fontWeight: '700', color: colors.gray[800] },
   firstStep: { fontSize: 16, fontWeight: '700', color: colors.success[700] },
-  insightsContainer: {
+  insightsCard: {
     backgroundColor: colors.primary[50],
     borderRadius: 10,
-    padding: 10,
+    padding: 12,
     marginVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
   },
-  insightItem: {
+  insightsTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary[700],
+    marginBottom: 8,
+  },
+  insightRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 4,
+    marginBottom: 6,
   },
-  insightIcon: {
-    fontSize: 12,
-    marginRight: 6,
+  insightBullet: {
+    fontSize: 14,
+    marginRight: 8,
   },
   insightText: {
     flex: 1,
-    fontSize: 12,
-    color: colors.primary[800],
+    fontSize: 13,
+    color: colors.gray[700],
+  },
+  insightsContainer: {
+    backgroundColor: colors.primary[50],
+    borderRadius: 10,
   },
   progressContainer: {
-    backgroundColor: colors.success[50],
-    borderRadius: 10,
-    padding: 10,
-    marginVertical: 8,
+    marginTop: 12,
   },
   progressHeader: {
     flexDirection: 'row',

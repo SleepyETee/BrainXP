@@ -1,26 +1,17 @@
-// BrainXP Home Screen - ADHD-Friendly Visual Experience
-// Colors optimized for: calm focus, reduced overstimulation, clear organization
+// BrainXP Home Screen - Notion-inspired, ADHD-Friendly Visual Experience
+// Clean, efficient, minimal cognitive load design
 import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
   StatusBar,
-  ActivityIndicator,
 } from 'react-native';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  useAnimatedScrollHandler,
-  withSpring,
-  withTiming,
-  withDelay,
-  interpolate,
-  Extrapolation,
   FadeInDown,
-  FadeInRight,
+  useAnimatedScrollHandler,
+  useSharedValue,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -31,207 +22,26 @@ import { useProgressStore } from '../../src/stores/progressStore';
 import { useFocusStore } from '../../src/stores/focusStore';
 import { useTimelineStore } from '../../src/stores/timelineStore';
 import { TimelineBlockWithTask } from '../../src/types/timeline';
-import { GlassCard } from '../../src/components/ui/GlassCard';
-import { GradientCard } from '../../src/components/ui/GradientCard';
-import { AnimatedButton } from '../../src/components/ui/AnimatedButton';
-import { AICoach } from '../../src/components/ai/AICoach';
-import { AIInsightsCard, InsightItem } from '../../src/components/ai/AIInsightsCard';
+import { Task } from '../../src/types/task';
+import { HabitWithLogs } from '../../src/types/habit';
+import { InsightItem } from '../../src/components/ai/AIInsightsCard';
 import { ParticleExplosion } from '../../src/components/gamification/ParticleExplosion';
-import { colors, gradients, shadows, semanticColors, adhdPalette } from '../../src/theme/colors';
+import { colors, gradients, adhdPalette } from '../../src/theme/colors';
 import { useTheme } from '../../src/theme';
-import { springConfigs } from '../../src/utils/animations';
 import { getTimeOfDayGreeting } from '../../src/utils/date';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+// Dashboard preview components
+import {
+  NextUpCard,
+  NextUpItem,
+  TimelinePreview,
+  TasksPreview,
+  HabitsPreview,
+  InsightsPreview,
+  QuickActionsBar,
+} from '../../src/components/dashboard';
 
-// Mock AI insights - will be replaced with real API data
-const MOCK_INSIGHTS: InsightItem[] = [
-  {
-    id: '1',
-    type: 'productivity',
-    icon: '📊',
-    title: 'Peak Focus Time',
-    message: 'Your best focus hours are 9-11 AM. Consider scheduling important tasks then!',
-    actionLabel: 'Schedule Now',
-  },
-  {
-    id: '2',
-    type: 'encouragement',
-    icon: '💪',
-    title: "You're On Fire!",
-    message: "3-day streak! You're building great momentum. Keep it up!",
-  },
-  {
-    id: '3',
-    type: 'suggestion',
-    icon: '💡',
-    title: 'Try Body Doubling',
-    message: 'Working alongside others can boost focus. Try a virtual coworking session!',
-    actionLabel: 'Learn More',
-  },
-];
-
-const StatCard: React.FC<{
-  emoji: string;
-  value: string | number;
-  label: string;
-  gradient: keyof typeof gradients;
-  delay: number;
-  onPress?: () => void;
-}> = ({ emoji, value, label, gradient, delay, onPress }) => {
-  const scale = useSharedValue(1);
-
-  const handlePressIn = () => {
-    scale.value = withSpring(0.95, springConfigs.snappy);
-  };
-
-  const handlePressOut = () => {
-    scale.value = withSpring(1, springConfigs.bouncy);
-  };
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  return (
-    <Animated.View
-      entering={FadeInDown.delay(delay).springify()}
-      style={[styles.statCard, animatedStyle]}
-    >
-      <TouchableOpacity
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        activeOpacity={1}
-        style={styles.statCardInner}
-      >
-        <LinearGradient
-          colors={[`${gradients[gradient][0]}15`, `${gradients[gradient][1]}25`]}
-          style={styles.statGradient}
-        >
-          <Text style={styles.statEmoji}>{emoji}</Text>
-          <Text style={[styles.statValue, { color: gradients[gradient][0] }]}>
-            {value}
-          </Text>
-          <Text style={styles.statLabel}>{label}</Text>
-        </LinearGradient>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-};
-
-const TaskPreviewCard: React.FC<{
-  task: { id: string; title: string; priority: string; dueDate?: string };
-  onPress: () => void;
-  onComplete: () => void;
-  index: number;
-}> = ({ task, onPress, onComplete, index }) => {
-  const scale = useSharedValue(1);
-  const checkScale = useSharedValue(1);
-
-  const priorityColor = semanticColors.priority[task.priority as keyof typeof semanticColors.priority] || colors.gray[400];
-
-  const handleComplete = async () => {
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    checkScale.value = withSpring(1.3, springConfigs.wobbly);
-    setTimeout(() => {
-      checkScale.value = withSpring(1, springConfigs.gentle);
-      onComplete();
-    }, 200);
-  };
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const checkAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: checkScale.value }],
-  }));
-
-  return (
-    <Animated.View entering={FadeInRight.delay(index * 80).springify()}>
-      <TouchableOpacity
-        onPress={onPress}
-        onPressIn={() => {
-          scale.value = withSpring(0.98, springConfigs.snappy);
-        }}
-        onPressOut={() => {
-          scale.value = withSpring(1, springConfigs.bouncy);
-        }}
-        activeOpacity={1}
-      >
-        <Animated.View style={[styles.taskCard, shadows.md, animatedStyle]}>
-          <TouchableOpacity onPress={handleComplete}>
-            <Animated.View style={[styles.taskCheckbox, checkAnimatedStyle]}>
-              <View
-                style={[styles.taskCheckboxInner, { borderColor: priorityColor }]}
-              />
-            </Animated.View>
-          </TouchableOpacity>
-          <View style={styles.taskContent}>
-            <Text style={styles.taskTitle} numberOfLines={1}>
-              {task.title}
-            </Text>
-            {task.dueDate && (
-              <Text style={styles.taskDue}>Due today</Text>
-            )}
-          </View>
-          <View style={[styles.priorityDot, { backgroundColor: priorityColor }]} />
-        </Animated.View>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-};
-
-const HabitChip: React.FC<{
-  habit: { id: string; name: string; icon?: string; todayLog?: { completed: boolean } };
-  onToggle: () => void;
-  index: number;
-}> = ({ habit, onToggle, index }) => {
-  const scale = useSharedValue(1);
-  const isCompleted = habit.todayLog?.completed;
-
-  const handleToggle = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    scale.value = withSpring(1.1, springConfigs.wobbly);
-    setTimeout(() => {
-      scale.value = withSpring(1, springConfigs.gentle);
-      onToggle();
-    }, 150);
-  };
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  return (
-    <Animated.View entering={FadeInDown.delay(200 + index * 60).springify()}>
-      <TouchableOpacity onPress={handleToggle} activeOpacity={0.8}>
-        <Animated.View
-          style={[
-            styles.habitChip,
-            isCompleted && styles.habitChipCompleted,
-            animatedStyle,
-          ]}
-        >
-          <Text style={styles.habitIcon}>{habit.icon || '⭐'}</Text>
-          <Text
-            style={[styles.habitName, isCompleted && styles.habitNameCompleted]}
-            numberOfLines={1}
-          >
-            {habit.name}
-          </Text>
-          {isCompleted && <Text style={styles.habitCheck}>✓</Text>}
-        </Animated.View>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-};
-
-const formatTime = (iso: string) => {
-  const date = new Date(iso);
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-};
+import { getInsights } from '../../src/services/api/ai';
 
 const formatDuration = (totalSeconds: number | null | undefined) => {
   if (totalSeconds == null) return '--:--';
@@ -240,123 +50,57 @@ const formatDuration = (totalSeconds: number | null | undefined) => {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
 
-const blockEmoji: Record<string, string> = {
-  task: '📌',
-  focus: '⏱️',
-  break: '🌿',
-  buffer: '🛟',
-  routine: '🔁',
-  event: '📅',
-};
-
-const TimelineBlockCard: React.FC<{
-  block: TimelineBlockWithTask;
-  isCurrent: boolean;
-  onStart: () => void;
-  onBuffer: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-}> = ({ block, isCurrent, onStart, onBuffer, onMoveUp, onMoveDown }) => {
-  const theme = useTheme();
-  const typeEmoji = blockEmoji[block.type] || '🗓️';
-  const borderColor = block.color || theme.palette.primary[400];
-  const cardBackground = isCurrent ? theme.palette.success[50] : theme.background.card;
-
-  return (
-    <View
-      style={[
-        styles.timelineCard,
-        { borderLeftColor: borderColor, backgroundColor: cardBackground },
-      ]}
-    >
-      <View style={styles.timelineCardHeader}>
-        <Text style={styles.timelineEmoji}>{typeEmoji}</Text>
-        <Text style={styles.timelineTitle} numberOfLines={1}>
-          {block.title}
-        </Text>
-        <View style={styles.timelineMoves}>
-          <TouchableOpacity onPress={onMoveUp} accessibilityLabel="Move up">
-            <Text style={styles.timelineMoveArrow}>↑</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onMoveDown} accessibilityLabel="Move down">
-            <Text style={styles.timelineMoveArrow}>↓</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-      <View style={styles.timelineMeta}>
-        <Text style={styles.timelineTime}>
-          {formatTime(block.startTime)}–{formatTime(block.endTime)}
-        </Text>
-        {block.task && (
-          <Text style={styles.timelineTask} numberOfLines={1}>
-            Links task: {block.task.title}
-          </Text>
-        )}
-      </View>
-      <View style={styles.timelineActions}>
-        <TouchableOpacity
-          style={[styles.timelineButton, { backgroundColor: theme.palette.primary[500] }]}
-          onPress={onStart}
-        >
-          <Text style={styles.timelineButtonText}>{isCurrent ? 'Resume Focus' : 'Focus'}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.timelineButton, styles.timelineSecondary, { backgroundColor: theme.palette.gray[100] }]}
-          onPress={onBuffer}
-        >
-          <Text style={[styles.timelineButtonText, styles.timelineButtonSecondary]}>Add buffer</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
-
 export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
   const scrollY = useSharedValue(0);
-  const [showCoach, setShowCoach] = useState(true);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [aiInsights, setAiInsights] = useState<InsightItem[]>([]);
+  const [isLoadingInsights, setIsLoadingInsights] = useState(false);
 
-  // Store data - only select raw data to avoid selector issues
+  // Store data
   const tasks = useTaskStore((state) => state.tasks);
   const completeTask = useTaskStore((state) => state.completeTask);
 
-  // Compute derived task data locally
-  const todayTasks = useMemo(() => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    return tasks.filter((t) => {
-      if (t.status === 'done') return false;
-      if (!t.dueDate) return false;
-      const dueDate = t.dueDate.split('T')[0];
-      return dueDate === todayStr;
-    });
-  }, [tasks]);
-
-  const overdueTasks = useMemo(() => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    return tasks.filter((t) => {
-      if (t.status === 'done') return false;
-      if (!t.dueDate) return false;
-      const dueDate = t.dueDate.split('T')[0];
-      return dueDate < todayStr;
-    });
-  }, [tasks]);
-
-  // Memoize pendingTasks to prevent unnecessary re-renders
-  const pendingTasks = useMemo(() => {
-    return todayTasks.filter((t) => t.status !== 'done');
-  }, [todayTasks]);
-
-  // Habit store - only select raw data
+  // Habit store
   const habits = useHabitStore((state) => state.habits);
   const habitLogs = useHabitStore((state) => state.logs);
   const logHabit = useHabitStore((state) => state.logHabit);
 
-  // Compute derived habit data locally
-  const todayHabits = useMemo(() => {
+  // Progress store
+  const progress = useProgressStore((state) => state.progress);
+  const addXP = useProgressStore((state) => state.addXP);
+
+  // Focus store
+  const startFocusSession = useFocusStore((state) => state.startSession);
+  const endFocusSession = useFocusStore((state) => state.endSession);
+  const currentFocusSession = useFocusStore((state) => state.currentSession);
+  const getTodayFocusMinutes = useFocusStore((state) => state.getTodayFocusMinutes);
+
+  // Timeline store
+  const timelineBlocks = useTimelineStore((state) => state.blocks);
+  const selectedTimelineDay = useTimelineStore((state) => state.selectedDay);
+  const fetchTimelineBlocks = useTimelineStore((state) => state.fetchBlocks);
+  const setTimelineDay = useTimelineStore((state) => state.setSelectedDay);
+
+  // Current time for timeline
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Fetch timeline blocks on mount
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    if (!selectedTimelineDay) {
+      setTimelineDay(today);
+    }
+    fetchTimelineBlocks(selectedTimelineDay || today);
+  }, [fetchTimelineBlocks, selectedTimelineDay, setTimelineDay]);
+
+  // Derived data: today's habits with logs (defined early because used in useEffect below)
+  const todayHabits = useMemo((): HabitWithLogs[] => {
     const today = new Date();
     const dayOfWeek = today.getDay();
     const todayStr = today.toISOString().split('T')[0];
@@ -370,71 +114,80 @@ export default function HomeScreen() {
       });
   }, [habits, habitLogs]);
 
-  const completedHabitsCount = todayHabits.filter((h) => h.todayLog?.completed).length;
+  // Derived data: today's tasks
+  const pendingTasks = useMemo((): Task[] => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    return tasks.filter((t) => {
+      if (t.status === 'done') return false;
+      if (!t.dueDate && !t.scheduledDate) return false;
+      const dateStr = (t.dueDate || t.scheduledDate || '').split('T')[0];
+      return dateStr === todayStr || dateStr < todayStr; // Include overdue
+    });
+  }, [tasks]);
 
-  // Progress store - only select raw data
-  const progress = useProgressStore((state) => state.progress);
-  const addXP = useProgressStore((state) => state.addXP);
-
-  // Compute level progress locally
-  const levelProgress = useMemo(() => {
-    const xpForCurrentLevel = (level: number) => Math.floor(100 * Math.pow(1.5, level - 1));
-    const totalXP = progress?.totalXp ?? 0;
-    let level = 1;
-    let xpRemaining = totalXP;
-    while (xpRemaining >= xpForCurrentLevel(level)) {
-      xpRemaining -= xpForCurrentLevel(level);
-      level++;
-    }
-    const currentLevelXP = xpForCurrentLevel(level);
-    return {
-      level,
-      currentXP: xpRemaining,
-      requiredXP: currentLevelXP,
-      progress: currentLevelXP > 0 ? (xpRemaining / currentLevelXP) * 100 : 0,
-    };
-  }, [progress]);
-
-  // Focus store - only select raw data
-  const focusSessions = useFocusStore((state) => state.sessions);
-  const focusPreferences = useFocusStore((state) => state.preferences);
-  const startFocusSession = useFocusStore((state) => state.startSession);
-  const endFocusSession = useFocusStore((state) => state.endSession);
-  const currentFocusSession = useFocusStore((state) => state.currentSession);
-
-  // Timeline store
-  const timelineBlocks = useTimelineStore((state) => state.blocks);
-  const selectedTimelineDay = useTimelineStore((state) => state.selectedDay);
-  const fetchTimelineBlocks = useTimelineStore((state) => state.fetchBlocks);
-  const reorderTimeline = useTimelineStore((state) => state.reorderBlocks);
-  const insertTimelineBuffer = useTimelineStore((state) => state.insertBuffer);
-  const setTimelineDay = useTimelineStore((state) => state.setSelectedDay);
-  const timelineLoading = useTimelineStore((state) => state.isLoading);
-
-  // Compute today's focus minutes locally
-  const todayFocusMinutes = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    return focusSessions
-      .filter((s) => {
-        const sessionDate = s.startTime?.split('T')[0];
-        return sessionDate === today && !s.isActive && s.endTime;
-      })
-      .reduce((sum, s) => sum + (s.actualDuration || 0), 0);
-  }, [focusSessions]);
-
-  const focusGoal = focusPreferences.dailyGoalMinutes;
-  const focusProgress = Math.min((todayFocusMinutes / focusGoal) * 100, 100);
-
-  // Timeline data derived from tasks + store blocks
+  // Fetch AI insights
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
-    if (!selectedTimelineDay) {
-      setTimelineDay(today);
-    }
-    fetchTimelineBlocks(selectedTimelineDay || today);
-  }, [fetchTimelineBlocks, selectedTimelineDay, setTimelineDay]);
+    const fetchInsights = async () => {
+      try {
+        setIsLoadingInsights(true);
+        
+        // Calculate user stats
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
+        const completedTasksToday = tasks.filter(
+          (t) => t.status === 'done' && t.completedAt?.startsWith(todayStr)
+        ).length;
+        
+        const habitsCompletedToday = todayHabits.filter(
+          (h) => h.todayLog?.completed
+        ).length;
+        
+        const overdueTasks = tasks.filter(
+          (t) => t.dueDate && new Date(t.dueDate) < today && t.status !== 'done'
+        ).length;
+        
+        const currentStreak = progress?.currentStreak || 0;
+        
+        // Get focus minutes from focus store
+        const focusMinutes = getTodayFocusMinutes();
+        
+        // Determine time of day
+        const hour = today.getHours();
+        const timeOfDay =
+          hour >= 5 && hour < 12
+            ? 'morning'
+            : hour >= 12 && hour < 17
+            ? 'afternoon'
+            : hour >= 17 && hour < 21
+            ? 'evening'
+            : 'night';
 
-  const blocksForSelectedDay = useMemo(() => {
+        const insights = await getInsights({
+          tasksCompleted: completedTasksToday,
+          focusMinutes,
+          habitsCompleted: habitsCompletedToday,
+          currentStreak,
+          overdueTaskCount: overdueTasks,
+          timeOfDay,
+        });
+
+        setAiInsights(insights);
+      } catch {
+        // Silently handle - getInsights has its own fallback
+        // Keep empty array if even fallback fails
+        setAiInsights([]);
+      } finally {
+        setIsLoadingInsights(false);
+      }
+    };
+
+    // Fetch insights when tasks or habits change
+    fetchInsights();
+  }, [tasks, todayHabits, progress, getTodayFocusMinutes]);
+
+  // Derived data: timeline blocks with tasks
+  const blocksForSelectedDay = useMemo((): TimelineBlockWithTask[] => {
     const taskMap = new Map(tasks.map((t) => [t.id, t]));
     const day = selectedTimelineDay || new Date().toISOString().split('T')[0];
     return [...timelineBlocks]
@@ -446,12 +199,7 @@ export default function HomeScreen() {
       }));
   }, [timelineBlocks, tasks, selectedTimelineDay]);
 
-  const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 30000);
-    return () => clearInterval(id);
-  }, []);
-
+  // Current timeline block
   const currentTimelineBlock = useMemo(() => {
     return blocksForSelectedDay.find((block) => {
       const start = new Date(block.startTime).getTime();
@@ -461,53 +209,66 @@ export default function HomeScreen() {
     });
   }, [blocksForSelectedDay, now]);
 
-  const handleTimelineReorder = useCallback(
-    (blockId: string, direction: number) => {
-      const ordered = [...blocksForSelectedDay];
-      const index = ordered.findIndex((b) => b.id === blockId);
-      if (index === -1) return;
-      const targetIndex = index + direction;
-      if (targetIndex < 0 || targetIndex >= ordered.length) return;
-      const swapped = [...ordered];
-      [swapped[index], swapped[targetIndex]] = [swapped[targetIndex], swapped[index]];
-      reorderTimeline(
-        swapped.map((b) => b.id),
-        selectedTimelineDay
-      );
-    },
-    [blocksForSelectedDay, reorderTimeline, selectedTimelineDay]
-  );
+  // Next up item: current block, next block, or top task
+  const nextUpItem = useMemo((): NextUpItem => {
+    // If there's a current block, show it
+    if (currentTimelineBlock) {
+      const start = new Date(currentTimelineBlock.startTime);
+      const end = new Date(currentTimelineBlock.endTime);
+      const timeLabel = `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+      return {
+        kind: 'block',
+        title: currentTimelineBlock.title,
+        subtitle: currentTimelineBlock.task?.title,
+        timeLabel,
+        isCurrent: true,
+        color: currentTimelineBlock.color,
+      };
+    }
 
-  const handleStartFocusForBlock = useCallback(
-    (block: TimelineBlockWithTask) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      const durationMinutes = Math.max(
-        1,
-        Math.round(
-          (new Date(block.endTime).getTime() - new Date(block.startTime).getTime()) / 60000
-        )
-      );
-      startFocusSession({
-        taskId: block.taskId,
-        taskDescription: block.title,
-        plannedDuration: durationMinutes,
-        timelineBlockId: block.id,
-        sessionType: block.type === 'focus' ? 'deep_work' : 'pomodoro',
-        breakDuration: 5,
-        longBreakDuration: 15,
-      });
-    },
-    [startFocusSession]
-  );
+    // If there's a next block coming up, show it
+    const upcomingBlock = blocksForSelectedDay.find((block) => {
+      const start = new Date(block.startTime).getTime();
+      return start > now.getTime();
+    });
 
-  const handleBuffer = useCallback(
-    async (blockId: string) => {
-      Haptics.selectionAsync().catch(() => {});
-      await insertTimelineBuffer(blockId, { minutes: 5 });
-    },
-    [insertTimelineBuffer]
-  );
+    if (upcomingBlock) {
+      const start = new Date(upcomingBlock.startTime);
+      const end = new Date(upcomingBlock.endTime);
+      const timeLabel = `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+      return {
+        kind: 'block',
+        title: upcomingBlock.title,
+        subtitle: upcomingBlock.task?.title,
+        timeLabel,
+        isCurrent: false,
+        color: upcomingBlock.color,
+      };
+    }
 
+    // Fall back to top task
+    const topTask = pendingTasks[0];
+    if (topTask) {
+      return {
+        kind: 'task',
+        title: topTask.title,
+        priority: topTask.priority,
+        subtaskCount: topTask.subtasks?.length,
+        estimateMinutes: topTask.estimatedMinutes,
+        dueLabel: topTask.dueDate ? 'Due today' : undefined,
+        isCompleted: topTask.status === 'done',
+      };
+    }
+
+    // Empty state
+    return {
+      kind: 'empty',
+      title: 'All caught up!',
+      message: 'Add a task or plan some time blocks.',
+    };
+  }, [currentTimelineBlock, blocksForSelectedDay, pendingTasks, now]);
+
+  // Focus timer remaining
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   useEffect(() => {
     if (!currentFocusSession) {
@@ -527,63 +288,19 @@ export default function HomeScreen() {
     return () => clearInterval(id);
   }, [currentFocusSession]);
 
-  // Nudges: pre-transition + drift detection
-  const [transitionNudge, setTransitionNudge] = useState<string | null>(null);
-  const [driftNudge, setDriftNudge] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!currentTimelineBlock) {
-      setTransitionNudge(null);
-      return;
-    }
-    const endMs = new Date(currentTimelineBlock.endTime).getTime();
-    const deltaMs = endMs - now.getTime();
-    if (deltaMs > 0 && deltaMs <= 5 * 60 * 1000) {
-      const minutesLeft = Math.max(1, Math.ceil(deltaMs / 60000));
-      setTransitionNudge(`Wrap up soon: ${currentTimelineBlock.title} ends in ${minutesLeft}m`);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-    } else {
-      setTransitionNudge(null);
-    }
-  }, [currentTimelineBlock, now]);
-
-  useEffect(() => {
-    if (currentFocusSession && remainingSeconds === 0) {
-      setDriftNudge('Timer overrun — extend or log it?');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-    } else {
-      setDriftNudge(null);
-    }
-  }, [currentFocusSession, remainingSeconds]);
-
-  // Generate greeting message
-  const getCoachMessage = useCallback(() => {
-    const greeting = getTimeOfDayGreeting();
-    const pendingCount = pendingTasks.length;
-    const overdueCount = overdueTasks.length;
-
-    if (overdueCount > 0) {
-      return `${greeting}! You have ${overdueCount} overdue task${overdueCount > 1 ? 's' : ''}. Let's tackle them together - pick the smallest one first!`;
-    }
-    if (pendingCount === 0) {
-      return `${greeting}! All caught up! 🎉 Great job staying on top of things. How about starting a focus session or reviewing your habits?`;
-    }
-    if (pendingCount <= 3) {
-      return `${greeting}! You have ${pendingCount} task${pendingCount > 1 ? 's' : ''} for today. Totally manageable! Which one feels easiest to start with?`;
-    }
-    return `${greeting}! ${pendingCount} tasks on your plate. Remember: you don't have to do them all at once. Start with just one! 💪`;
-  }, [pendingTasks, overdueTasks]);
-
-  const handleTaskComplete = async (taskId: string) => {
+  // Handlers
+  const handleTaskComplete = useCallback(async (taskId: string) => {
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const result = await completeTask(taskId);
     await addXP(result.xpEarned, 'task_complete', 'Completed a task', taskId);
     setShowCelebration(true);
-  };
+  }, [completeTask, addXP]);
 
-  const handleHabitToggle = async (habitId: string) => {
+  const handleHabitToggle = useCallback(async (habitId: string) => {
     const habit = todayHabits.find((h) => h.id === habitId);
     if (!habit) return;
 
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const today = new Date().toISOString().split('T')[0];
     const isCompleted = habit.todayLog?.completed;
 
@@ -595,8 +312,37 @@ export default function HomeScreen() {
 
     if (!isCompleted) {
       await addXP(result.xpEarned, 'habit_log', 'Logged a habit', habitId);
+      setShowCelebration(true);
     }
-  };
+  }, [todayHabits, logHabit, addXP]);
+
+  const handleStartFocusForBlock = useCallback((block: TimelineBlockWithTask) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const durationMinutes = Math.max(
+      1,
+      Math.round(
+        (new Date(block.endTime).getTime() - new Date(block.startTime).getTime()) / 60000
+      )
+    );
+    startFocusSession({
+      taskId: block.taskId,
+      taskDescription: block.title,
+      plannedDuration: durationMinutes,
+      timelineBlockId: block.id,
+      sessionType: block.type === 'focus' ? 'deep_work' : 'pomodoro',
+      breakDuration: 5,
+      longBreakDuration: 15,
+    });
+  }, [startFocusSession]);
+
+  const handleStartFocusForNextUp = useCallback(() => {
+    if (nextUpItem.kind === 'block') {
+      const block = currentTimelineBlock || blocksForSelectedDay.find(b => b.title === nextUpItem.title);
+      if (block) handleStartFocusForBlock(block);
+    } else if (nextUpItem.kind === 'task') {
+      router.push('/focus/setup');
+    }
+  }, [nextUpItem, currentTimelineBlock, blocksForSelectedDay, handleStartFocusForBlock, router]);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -608,24 +354,7 @@ export default function HomeScreen() {
     ? [theme.palette.gray[900], theme.palette.gray[800], theme.palette.gray[700]] as const
     : [adhdPalette.grayNurse, '#F0F7F6', colors.gray[100]] as const;
 
-  const headerStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(
-      scrollY.value,
-      [0, 100],
-      [1, 0],
-      Extrapolation.CLAMP
-    );
-    const scale = interpolate(
-      scrollY.value,
-      [0, 100],
-      [1, 0.95],
-      Extrapolation.CLAMP
-    );
-    return {
-      opacity,
-      transform: [{ scale }],
-    };
-  });
+  const dayLabel = new Date().toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background.primary }]}>
@@ -639,7 +368,7 @@ export default function HomeScreen() {
         particleCount={25}
       />
 
-      {/* Background gradient - ADHD-friendly calming tones */}
+      {/* Background gradient */}
       <LinearGradient colors={backgroundGradient} style={styles.backgroundGradient} />
 
       <Animated.ScrollView
@@ -649,404 +378,133 @@ export default function HomeScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <Animated.View style={[styles.header, headerStyle]}>
+        {/* Compact Header */}
+        <View style={styles.header}>
           <View>
             <Text style={[styles.greeting, { color: theme.text.secondary }]}>
               {getTimeOfDayGreeting()}
             </Text>
             <Text style={[styles.title, { color: theme.text.primary }]}>
-              Ready to crush it? 🚀
+              Let's focus
             </Text>
           </View>
           <TouchableOpacity
             style={styles.levelBadge}
             onPress={() => router.push('/analytics')}
             activeOpacity={0.8}
+            accessibilityLabel={`Level ${progress?.level || 1}`}
           >
             <LinearGradient
               colors={[...gradients.focus] as [string, string, ...string[]]}
               style={styles.levelGradient}
             >
-              <Text style={styles.levelText}>Lv {progress?.level || 1}</Text>
+              <Text style={styles.levelText}>{progress?.level || 1}</Text>
             </LinearGradient>
           </TouchableOpacity>
-        </Animated.View>
+        </View>
 
-        {/* AI Coach Card */}
-        {showCoach && (
-          <Animated.View entering={FadeInDown.delay(100).springify()}>
-            <AICoach
-              message={getCoachMessage()}
-              type={overdueTasks.length > 0 ? 'encouragement' : 'greeting'}
-              actionLabel={overdueTasks.length > 0 ? 'View Tasks' : undefined}
-              onAction={() => router.push('/tasks')}
-              onDismiss={() => setShowCoach(false)}
-            />
-          </Animated.View>
-        )}
-
-        {/* Daily Planning Quick Access - ADHD-friendly morning routine */}
-        <Animated.View entering={FadeInDown.delay(150).springify()}>
-          <TouchableOpacity
-            style={styles.planningCard}
-            onPress={() => router.push('/planning')}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Plan your day"
-            accessibilityHint="Opens the 1-3-5 daily planning screen"
-          >
-            <LinearGradient
-              colors={[colors.secondary[50], colors.secondary[100]] as const}
-              style={styles.planningGradient}
-            >
-              <View style={styles.planningIcon}>
-                <Text style={styles.planningEmoji}>📝</Text>
-              </View>
-              <View style={styles.planningContent}>
-                <Text style={styles.planningTitle}>Plan Your Day</Text>
-                <Text style={styles.planningSubtitle}>
-                  1 big + 3 medium + 5 small tasks
-                </Text>
-              </View>
-              <Text style={styles.planningArrow}>→</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </Animated.View>
-
-        {/* XP Progress Card - Uses calming Shadow Green */}
-        <Animated.View entering={FadeInDown.delay(200).springify()}>
-          <GradientCard
-            gradient="focus"
-            style={styles.xpCard}
-            onPress={() => router.push('/analytics')}
-            animated={false}
-          >
-            <View style={styles.xpHeader}>
-              <View>
-                <Text style={styles.xpLabel}>Level {progress?.level || 1}</Text>
-                <Text style={styles.xpValue}>{progress?.totalXp || 0} XP</Text>
-              </View>
-              <View style={styles.xpBadge}>
-                <Text style={styles.xpBadgeText}>⭐</Text>
-              </View>
-            </View>
-            <View style={styles.xpProgressContainer}>
-              <View style={styles.xpProgressBg}>
-                <Animated.View
-                  style={[
-                    styles.xpProgressFill,
-                    { width: `${levelProgress.progress}%` as const },
-                  ]}
-                />
-              </View>
-              <Text style={styles.xpToNext}>
-                {levelProgress.requiredXP - levelProgress.currentXP} XP to level {levelProgress.level + 1}
-              </Text>
-            </View>
-          </GradientCard>
-        </Animated.View>
-
-        {/* Quick Stats - Color-coded for easy recognition */}
-        <View style={styles.statsGrid}>
-          <StatCard
-            emoji="✅"
-            value={`${todayTasks.filter((t) => t.status === 'done').length}/${todayTasks.length}`}
-            label="Tasks"
-            gradient="growth"
-            delay={300}
-            onPress={() => router.push('/tasks')}
-          />
-          <StatCard
-            emoji="🔄"
-            value={`${completedHabitsCount}/${todayHabits.length}`}
-            label="Habits"
-            gradient="balance"
-            delay={350}
-            onPress={() => router.push('/habits')}
-          />
-          <StatCard
-            emoji="⏱️"
-            value={`${todayFocusMinutes}m`}
-            label="Focus"
-            gradient="focus"
-            delay={400}
-            onPress={() => router.push('/focus/setup')}
-          />
-          <StatCard
-            emoji="🔥"
-            value={progress?.currentStreak || 0}
-            label="Streak"
-            gradient="streak"
-            delay={450}
-            onPress={() => router.push('/analytics')}
+        {/* Next Up Card */}
+        <View style={styles.nextUpSection}>
+          <NextUpCard
+            item={nextUpItem}
+            onPressItem={() => {
+              if (nextUpItem.kind === 'task') {
+                const task = pendingTasks[0];
+                if (task) router.push(`/task/${task.id}`);
+              } else if (nextUpItem.kind === 'block') {
+                router.push('/planning');
+              }
+            }}
+            onToggleComplete={() => {
+              if (nextUpItem.kind === 'task') {
+                const task = pendingTasks[0];
+                if (task) handleTaskComplete(task.id);
+              }
+            }}
+            onStartFocus={handleStartFocusForNextUp}
+            onLater={() => router.push('/tasks')}
           />
         </View>
 
-        {/* Focus Button - Calming teal for sustained attention */}
-        <Animated.View entering={FadeInDown.delay(500).springify()}>
-          <GradientCard
-            gradient="focus"
-            style={styles.focusCard}
-            onPress={() => router.push('/focus/setup')}
-            animated={false}
-          >
-            <View style={styles.focusContent}>
-              <View style={styles.focusIcon}>
-                <Text style={styles.focusEmoji}>🎯</Text>
-              </View>
-              <View style={styles.focusText}>
-                <Text style={styles.focusTitle}>Start Focus Session</Text>
-                <Text style={styles.focusSubtitle}>
-                  {focusProgress >= 100
-                    ? 'Daily goal reached! 🎉'
-                    : `${Math.round(focusProgress)}% of daily goal`}
-                </Text>
-              </View>
-              <Text style={styles.focusArrow}>→</Text>
-            </View>
-          </GradientCard>
-        </Animated.View>
-
-        {/* Visual Timeline - Now & Next */}
-        <Animated.View entering={FadeInDown.delay(520).springify()} style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>🧭 Visual Timeline</Text>
-            <Text style={styles.timelineDayLabel}>
-              {selectedTimelineDay || new Date().toISOString().split('T')[0]}
-            </Text>
-          </View>
-
-          {(transitionNudge || driftNudge) && (
-            <GlassCard style={styles.nudgeCard} animated={false}>
-              <Text style={styles.nudgeTitle}>Gentle nudge</Text>
-              <Text style={styles.nudgeText}>{transitionNudge || driftNudge}</Text>
-            </GlassCard>
-          )}
-
-          {timelineLoading ? (
-            <GlassCard style={styles.emptyCard} animated={false}>
-              <ActivityIndicator color={colors.primary[500]} />
-              <Text style={styles.emptyText}>Loading your day...</Text>
-            </GlassCard>
-          ) : blocksForSelectedDay.length === 0 ? (
-            <GlassCard style={styles.emptyCard} animated={false}>
-              <Text style={styles.emptyEmoji}>🧠</Text>
-              <Text style={styles.emptyTitle}>No blocks yet</Text>
-              <Text style={styles.emptyText}>Drop tasks here to plan your day.</Text>
-            </GlassCard>
-          ) : (
-            <View style={styles.timelineList}>
-              {blocksForSelectedDay.map((block) => (
-                <TimelineBlockCard
-                  key={block.id}
-                  block={block}
-                  isCurrent={currentTimelineBlock?.id === block.id}
-                  onStart={() => handleStartFocusForBlock(block)}
-                  onBuffer={() => handleBuffer(block.id)}
-                  onMoveUp={() => handleTimelineReorder(block.id, -1)}
-                  onMoveDown={() => handleTimelineReorder(block.id, 1)}
-                />
-              ))}
-            </View>
-          )}
-        </Animated.View>
-
-        {/* AI Insights */}
-        <AIInsightsCard
-          insights={MOCK_INSIGHTS}
-          onInsightAction={(insight) => {
-            console.log('Insight action:', insight);
-          }}
-          onSeeAll={() => router.push('/analytics')}
+        {/* Timeline Preview */}
+        <TimelinePreview
+          dayLabel={dayLabel}
+          blocks={blocksForSelectedDay}
+          now={now}
+          currentBlockId={currentTimelineBlock?.id}
+          maxItems={3}
+          onPressBlock={handleStartFocusForBlock}
+          onPressEdit={() => router.push('/planning')}
+          onPressAdd={() => router.push('/planning')}
         />
 
-        {/* Quick Tools - AI-powered productivity */}
-        <Animated.View
-          entering={FadeInDown.delay(550).springify()}
-          style={styles.quickToolsSection}
-        >
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>🤖 Quick Tools</Text>
-            <TouchableOpacity onPress={() => router.push('/tools')}>
-              <Text style={styles.seeAll}>See All</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.quickToolsRow}>
-            <TouchableOpacity
-              style={styles.quickTool}
-              onPress={() => router.push('/tools/magic')}
-            >
-              <View style={[styles.quickToolIcon, { backgroundColor: '#764BA215' }]}>
-                <Text style={styles.quickToolEmoji}>🪄</Text>
-              </View>
-              <Text style={styles.quickToolLabel}>Break Down</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickTool}
-              onPress={() => router.push('/tools/spoons')}
-            >
-              <View style={[styles.quickToolIcon, { backgroundColor: colors.primary[50] }]}>
-                <Text style={styles.quickToolEmoji}>🥄</Text>
-              </View>
-              <Text style={styles.quickToolLabel}>Estimate</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickTool}
-              onPress={() => router.push('/study')}
-            >
-              <View style={[styles.quickToolIcon, { backgroundColor: colors.success[50] }]}>
-                <Text style={styles.quickToolEmoji}>📚</Text>
-              </View>
-              <Text style={styles.quickToolLabel}>Study</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickTool}
-              onPress={() => router.push('/tools/tone')}
-            >
-              <View style={[styles.quickToolIcon, { backgroundColor: colors.warning[50] }]}>
-                <Text style={styles.quickToolEmoji}>✍️</Text>
-              </View>
-              <Text style={styles.quickToolLabel}>Rewrite</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
+        {/* Tasks Preview */}
+        <TasksPreview
+          tasks={pendingTasks.slice(0, 4)}
+          totalCount={pendingTasks.length}
+          onPressTask={(task) => router.push(`/task/${task.id}`)}
+          onCompleteTask={handleTaskComplete}
+          onSeeAll={() => router.push('/tasks')}
+          onAddTask={() => router.push('/task/create')}
+        />
 
-        {/* Overdue Tasks Alert - Soft Zinnwaldite for gentle urgency */}
-        {overdueTasks.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(600).springify()}>
-            <GlassCard
-              style={styles.overdueCard}
-              backgroundColor={`${adhdPalette.zinnwaldite}15`}
-              borderColor={`${adhdPalette.zinnwaldite}40`}
-              animated={false}
-            >
-              <View style={styles.overdueHeader}>
-                <Text style={styles.overdueTitle}>⚠️ Needs Attention</Text>
-                <View style={styles.overdueBadge}>
-                  <Text style={styles.overdueBadgeText}>{overdueTasks.length}</Text>
-                </View>
-              </View>
-              {overdueTasks.slice(0, 2).map((task, index) => (
-                <TaskPreviewCard
-                  key={task.id}
-                  task={task}
-                  onPress={() => router.push(`/task/${task.id}`)}
-                  onComplete={() => handleTaskComplete(task.id)}
-                  index={index}
-                />
-              ))}
-              {overdueTasks.length > 2 && (
-                <TouchableOpacity
-                  style={styles.viewMore}
-                  onPress={() => router.push('/tasks')}
-                >
-                  <Text style={styles.viewMoreText}>
-                    View {overdueTasks.length - 2} more →
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </GlassCard>
-          </Animated.View>
+        {/* Habits Preview */}
+        <HabitsPreview
+          habits={todayHabits}
+          windowDays={7}
+          onToggleHabit={handleHabitToggle}
+          onSeeAll={() => router.push('/habits')}
+          onAddHabit={() => router.push('/habit/create')}
+        />
+
+        {/* AI Insights Preview */}
+        {!isLoadingInsights && aiInsights.length > 0 && (
+          <InsightsPreview
+            insights={aiInsights}
+            maxItems={2}
+            onPressInsight={(insight) => {
+              // Handle insight actions
+              if (insight.actionType === 'start_focus') {
+                router.push('/focus/setup');
+              } else if (insight.actionType === 'view_tasks') {
+                router.push('/tasks');
+              } else {
+                console.log('Insight:', insight);
+              }
+            }}
+            onSeeAll={() => router.push('/analytics')}
+          />
         )}
-
-        {/* Today's Tasks */}
-        <Animated.View
-          entering={FadeInDown.delay(700).springify()}
-          style={styles.section}
-        >
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>📋 Today's Tasks</Text>
-            <TouchableOpacity onPress={() => router.push('/tasks')}>
-              <Text style={styles.seeAll}>See All</Text>
-            </TouchableOpacity>
-          </View>
-
-          {pendingTasks.length === 0 ? (
-            <GlassCard style={styles.emptyCard} animated={false}>
-              <Text style={styles.emptyEmoji}>🎉</Text>
-              <Text style={styles.emptyTitle}>All caught up!</Text>
-              <Text style={styles.emptyText}>No pending tasks for today</Text>
-              <AnimatedButton
-                title="+ Add Task"
-                variant="outline"
-                size="sm"
-                onPress={() => router.push('/task/create')}
-                style={styles.addButton}
-              />
-            </GlassCard>
-          ) : (
-            <View style={styles.tasksList}>
-              {pendingTasks.slice(0, 4).map((task, index) => (
-                <TaskPreviewCard
-                  key={task.id}
-                  task={task}
-                  onPress={() => router.push(`/task/${task.id}`)}
-                  onComplete={() => handleTaskComplete(task.id)}
-                  index={index}
-                />
-              ))}
-            </View>
-          )}
-        </Animated.View>
-
-        {/* Today's Habits */}
-        <Animated.View
-          entering={FadeInDown.delay(800).springify()}
-          style={styles.section}
-        >
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>🔄 Today's Habits</Text>
-            <TouchableOpacity onPress={() => router.push('/habits')}>
-              <Text style={styles.seeAll}>See All</Text>
-            </TouchableOpacity>
-          </View>
-
-          {todayHabits.length === 0 ? (
-            <GlassCard style={styles.emptyCard} animated={false}>
-              <Text style={styles.emptyEmoji}>🌱</Text>
-              <Text style={styles.emptyTitle}>Start a habit</Text>
-              <Text style={styles.emptyText}>Build routines that stick</Text>
-              <AnimatedButton
-                title="+ Create Habit"
-                variant="outline"
-                size="sm"
-                onPress={() => router.push('/habit/create')}
-                style={styles.addButton}
-              />
-            </GlassCard>
-          ) : (
-            <View style={styles.habitsGrid}>
-              {todayHabits.map((habit, index) => (
-                <HabitChip
-                  key={habit.id}
-                  habit={habit}
-                  onToggle={() => handleHabitToggle(habit.id)}
-                  index={index}
-                />
-              ))}
-            </View>
-          )}
-        </Animated.View>
 
         {/* Bottom spacing */}
         <View style={styles.bottomSpacing} />
       </Animated.ScrollView>
 
+      {/* Quick Actions Bar */}
+      <View style={styles.quickActionsContainer}>
+        <QuickActionsBar
+          onQuickCapture={() => router.push('/inbox')}
+          onCreateTask={() => router.push('/task/create')}
+          onPlanDay={() => router.push('/planning')}
+          onBreakDown={() => router.push('/tools/magic')}
+          onOpenTools={() => router.push('/tools')}
+        />
+      </View>
+
       {/* Focus timer overlay */}
       {currentFocusSession && (
         <View style={styles.focusOverlay}>
-          <View>
-            <Text style={styles.focusOverlayLabel}>Focusing on</Text>
-            <Text style={styles.focusOverlayTitle} numberOfLines={1}>
+          <View style={styles.focusOverlayContent}>
+            <Text style={[styles.focusOverlayLabel, { color: theme.text.muted }]}>Focusing on</Text>
+            <Text style={[styles.focusOverlayTitle, { color: theme.text.primary }]} numberOfLines={1}>
               {currentFocusSession.taskDescription}
             </Text>
-            <Text style={styles.focusOverlaySubtitle}>
-              {formatDuration(remainingSeconds)} remaining
+            <Text style={[styles.focusOverlayTime, { color: theme.palette.primary[500] }]}>
+              {formatDuration(remainingSeconds)}
             </Text>
           </View>
           <TouchableOpacity
-            style={styles.focusOverlayButton}
+            style={[styles.focusOverlayButton, { backgroundColor: theme.palette.danger[500] }]}
             onPress={async () => {
               await endFocusSession({ completedTask: currentFocusSession.completedTask });
             }}
@@ -1055,22 +513,6 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       )}
-
-      {/* Floating Action Button */}
-      <Animated.View entering={FadeInDown.delay(900).springify()}>
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => router.push('/inbox')}
-          activeOpacity={0.9}
-        >
-          <LinearGradient
-            colors={[...gradients.focus] as [string, string, ...string[]]}
-            style={styles.fabGradient}
-          >
-            <Text style={styles.fabIcon}>+</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </Animated.View>
     </View>
   );
 }
@@ -1078,7 +520,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: adhdPalette.grayNurse, // Calming neutral base
+    backgroundColor: adhdPalette.grayNurse,
   },
   backgroundGradient: {
     ...StyleSheet.absoluteFillObject,
@@ -1087,568 +529,98 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingTop: 60,
-    paddingBottom: 120,
+    paddingTop: 56,
+    paddingBottom: 140,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 20,
+    paddingHorizontal: 16,
+    marginBottom: 16,
   },
   greeting: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.gray[500],
-    marginBottom: 4,
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 2,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
-    color: colors.gray[900],
     letterSpacing: -0.5,
   },
   levelBadge: {
-    borderRadius: 24,
+    borderRadius: 20,
     overflow: 'hidden',
-    ...shadows.focus, // Calming focus shadow
   },
   levelGradient: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   levelText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-
-  // Planning Card - ADHD-friendly quick access
-  planningCard: {
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 16,
-    overflow: 'hidden',
-    ...shadows.sm,
-  },
-  planningGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.secondary[200],
-  },
-  planningIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  planningEmoji: {
-    fontSize: 22,
-  },
-  planningContent: {
-    flex: 1,
-  },
-  planningTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: colors.gray[800],
-  },
-  planningSubtitle: {
-    fontSize: 13,
-    color: colors.gray[600],
-    marginTop: 2,
-  },
-  planningArrow: {
-    fontSize: 20,
-    color: colors.secondary[500],
-    fontWeight: '300',
-  },
-
-  // XP Card
-  xpCard: {
-    marginHorizontal: 16,
-    marginTop: 16,
-  },
-  xpHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  xpLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: 4,
-  },
-  xpValue: {
-    fontSize: 32,
     fontWeight: '800',
     color: '#FFFFFF',
   },
-  xpBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  xpBadgeText: {
-    fontSize: 28,
-  },
-  xpProgressContainer: {
-    gap: 8,
-  },
-  xpProgressBg: {
-    height: 8,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  xpProgressFill: {
-    height: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 4,
-  },
-  xpToNext: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-    textAlign: 'center',
-  },
-
-  // Stats Grid
-  statsGrid: {
-    flexDirection: 'row',
-    paddingHorizontal: 12,
-    marginTop: 16,
-    gap: 8,
-  },
-  statCard: {
-    flex: 1,
-  },
-  statCardInner: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  statGradient: {
-    padding: 14,
-    alignItems: 'center',
-    borderRadius: 16,
-  },
-  statEmoji: {
-    fontSize: 24,
-    marginBottom: 6,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: colors.gray[500],
-    marginTop: 2,
-  },
-
-  // Focus Card
-  focusCard: {
-    marginHorizontal: 16,
-    marginTop: 16,
-  },
-  focusContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  focusIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  focusEmoji: {
-    fontSize: 28,
-  },
-  focusText: {
-    flex: 1,
-  },
-  focusTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 2,
-  },
-  focusSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  focusArrow: {
-    fontSize: 24,
-    color: '#FFFFFF',
-    fontWeight: '300',
-  },
-
-  // Overdue Card
-  overdueCard: {
-    marginHorizontal: 16,
-    marginTop: 20,
-  },
-  overdueHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  overdueTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.danger[600],
-    flex: 1,
-  },
-  overdueBadge: {
-    backgroundColor: colors.danger[500],
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  overdueBadgeText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  viewMore: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  viewMoreText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.danger[500],
-  },
-
-  // Section
-  section: {
-    marginTop: 24,
+  nextUpSection: {
     paddingHorizontal: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.gray[900],
-  },
-  timelineDayLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.gray[500],
-  },
-  seeAll: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.primary[500],
-  },
-
-  // Quick Tools
-  quickToolsSection: {
-    marginTop: 16,
-    paddingHorizontal: 16,
-  },
-  quickToolsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  quickTool: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  quickToolIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  quickToolEmoji: {
-    fontSize: 22,
-  },
-  quickToolLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.gray[600],
-    textAlign: 'center',
-  },
-
-  // Timeline
-  timelineList: {
-    gap: 12,
-  },
-  timelineCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary[400],
-    gap: 8,
-    ...shadows.sm,
-  },
-  timelineCardActive: {
-    borderLeftColor: colors.success[500],
-    backgroundColor: colors.success[50],
-  },
-  timelineCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  timelineEmoji: {
-    fontSize: 18,
-  },
-  timelineTitle: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.gray[800],
-  },
-  timelineMoves: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  timelineMoveArrow: {
-    fontSize: 14,
-    color: colors.gray[500],
-  },
-  timelineMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  timelineTime: {
-    fontSize: 13,
-    color: colors.gray[700],
-    fontWeight: '600',
-  },
-  timelineTask: {
-    fontSize: 12,
-    color: colors.gray[500],
-    marginLeft: 8,
-  },
-  timelineActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  timelineButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: colors.primary[500],
-    alignItems: 'center',
-  },
-  timelineButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  timelineSecondary: {
-    backgroundColor: colors.gray[100],
-  },
-  timelineButtonSecondary: {
-    color: colors.gray[700],
-  },
-  nudgeCard: {
-    marginBottom: 12,
-    backgroundColor: colors.warning[50],
-  },
-  nudgeTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.warning[700],
     marginBottom: 4,
   },
-  nudgeText: {
-    fontSize: 13,
-    color: colors.gray[700],
-  },
-
-  // Task Card
-  tasksList: {
-    gap: 8,
-  },
-  taskCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: 14,
-    borderRadius: 14,
-    gap: 12,
-  },
-  taskCheckbox: {
-    padding: 2,
-  },
-  taskCheckboxInner: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-  },
-  taskContent: {
-    flex: 1,
-  },
-  taskTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.gray[800],
-  },
-  taskDue: {
-    fontSize: 12,
-    color: colors.gray[500],
-    marginTop: 2,
-  },
-  priorityDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-
-  // Habits Grid
-  habitsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  habitChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    gap: 8,
-    ...shadows.sm,
-  },
-  habitChipCompleted: {
-    backgroundColor: colors.success[50],
-    borderWidth: 1,
-    borderColor: colors.success[200],
-  },
-  habitIcon: {
-    fontSize: 18,
-  },
-  habitName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.gray[700],
-    maxWidth: 100,
-  },
-  habitNameCompleted: {
-    color: colors.success[700],
-  },
-  habitCheck: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.success[500],
-  },
-
-  // Empty State
-  emptyCard: {
-    alignItems: 'center',
-    paddingVertical: 28,
-  },
-  emptyEmoji: {
-    fontSize: 40,
-    marginBottom: 12,
-  },
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.gray[800],
-    marginBottom: 4,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: colors.gray[500],
-    marginBottom: 16,
-  },
-  addButton: {
-    marginTop: 4,
-  },
-
-  // FAB
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 100,
-    ...shadows.xl,
-  },
-  fabGradient: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fabIcon: {
-    fontSize: 32,
-    color: '#FFFFFF',
-    fontWeight: '300',
-    marginTop: -2,
-  },
-
-  // Focus overlay
-  focusOverlay: {
+  quickActionsContainer: {
     position: 'absolute',
     left: 16,
     right: 16,
     bottom: 24,
-    backgroundColor: '#0F172A',
+  },
+  focusOverlay: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 140,
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 16,
+    padding: 14,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    ...shadows.lg,
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  focusOverlayContent: {
+    flex: 1,
+    marginRight: 12,
   },
   focusOverlayLabel: {
-    color: colors.gray[200],
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '600',
     marginBottom: 2,
   },
   focusOverlayTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     marginBottom: 2,
   },
-  focusOverlaySubtitle: {
-    color: colors.gray[300],
-    fontSize: 12,
+  focusOverlayTime: {
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
   focusOverlayButton: {
-    backgroundColor: colors.warning[500],
     paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     borderRadius: 12,
   },
   focusOverlayButtonText: {
-    color: '#0F172A',
+    color: '#FFFFFF',
     fontWeight: '700',
+    fontSize: 14,
   },
-
   bottomSpacing: {
-    height: 40,
+    height: 60,
   },
 });

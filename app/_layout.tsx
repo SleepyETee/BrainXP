@@ -36,6 +36,8 @@ function RootLayoutContent() {
           },
         }}
       >
+        <Stack.Screen name="index" options={{ animation: 'none' }} />
+        <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(onboarding)" />
@@ -63,6 +65,7 @@ function RootLayoutContent() {
         <Stack.Screen name="study" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="routine" />
+        <Stack.Screen name="support" />
       </Stack>
     </>
   );

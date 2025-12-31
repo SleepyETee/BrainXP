@@ -55,10 +55,11 @@ export const ProcrastinationNudge: React.FC<ProcrastinationNudgeProps> = ({
   
   const startIntervention = useTherapyStore((state) => state.startIntervention);
   const completeIntervention = useTherapyStore((state) => state.completeIntervention);
-  const interventionHistory = useTherapyStore((state) => state.interventionHistory);
+  const interventions = useTherapyStore((state) => state.interventions);
   
-  const behaviorPatterns = useMLStore((state) => state.behaviorPatterns);
-  const productivityScore = useMLStore((state) => state.productivityScore);
+  // Use patterns from ML store instead of non-existent properties
+  const patterns = useMLStore((state) => state.patterns);
+  const learningStats = useMLStore((state) => state.learningStats);
 
   useEffect(() => {
     if (visible && !mlRecommendation) {
@@ -70,8 +71,8 @@ export const ProcrastinationNudge: React.FC<ProcrastinationNudgeProps> = ({
     setIsLoadingML(true);
     
     try {
-      const completedInterventions = interventionHistory.filter(
-        (i) => i.status === 'completed'
+      const completedInterventions = interventions.filter(
+        (i: any) => i.status === 'completed'
       );
       
       const outcomeStats = {
@@ -81,7 +82,7 @@ export const ProcrastinationNudge: React.FC<ProcrastinationNudgeProps> = ({
         renegotiate: { success: 0, total: 0 },
       };
       
-      completedInterventions.forEach((intervention) => {
+      completedInterventions.forEach((intervention: any) => {
         const outcome = intervention.outcome as keyof typeof outcomeStats;
         if (outcome && outcomeStats[outcome]) {
           outcomeStats[outcome].total++;
@@ -91,8 +92,13 @@ export const ProcrastinationNudge: React.FC<ProcrastinationNudgeProps> = ({
         }
       });
       
-      const cognitiveLoad = behaviorPatterns?.cognitiveLoad || 0.5;
-      const currentEnergy = productivityScore || 50;
+      // Use actual ML patterns
+      const cognitiveLoad = patterns?.averageSpoonCapacity 
+        ? (5 - patterns.averageSpoonCapacity) / 5 
+        : 0.5;
+      const currentEnergy = patterns?.estimationAccuracy 
+        ? patterns.estimationAccuracy * 100 
+        : 50;
       
       let recommendation: MLRecommendation;
       
@@ -595,7 +601,7 @@ const styles = StyleSheet.create({
   recommendedOption: {
     borderColor: colors.primary[400],
     borderWidth: 2,
-    backgroundColor: colors.primary[25] || '#F0F7FF',
+    backgroundColor: colors.primary[50],
   },
   recommendedDropOption: {
     borderColor: colors.accent[400],

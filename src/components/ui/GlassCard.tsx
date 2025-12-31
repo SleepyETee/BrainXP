@@ -23,6 +23,11 @@ interface GlassCardProps {
   padding?: number;
   borderColor?: string;
   backgroundColor?: string;
+  // Accessibility
+  accessible?: boolean;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
+  accessibilityRole?: 'button' | 'none';
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -39,6 +44,10 @@ export const GlassCard: React.FC<GlassCardProps> = ({
   padding = 16,
   borderColor,
   backgroundColor,
+  accessible = true,
+  accessibilityLabel,
+  accessibilityHint,
+  accessibilityRole = onPress ? 'button' : 'none',
 }) => {
   const scale = useSharedValue(1);
   const opacity = useSharedValue(animated ? 0 : 1);
@@ -121,6 +130,10 @@ export const GlassCard: React.FC<GlassCardProps> = ({
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
+        accessible={accessible}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityHint={accessibilityHint}
+        accessibilityRole={accessibilityRole}
         style={[styles.container, { borderRadius }, shadows.lg, animatedStyle, style]}
       >
         {content}

@@ -9,6 +9,7 @@ import {
   ScrollView,
   SafeAreaView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
@@ -23,7 +24,7 @@ import Animated, {
   withSequence,
   withTiming,
   useSharedValue,
-  withDelay,
+  withSpring,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -32,7 +33,7 @@ import { Input } from '../../src/components/ui/Input';
 import { Button } from '../../src/components/ui/Button';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useTheme } from '../../src/contexts/ThemeContext';
-import { colors, gradients } from '../../src/theme/colors';
+import { colors, gradients, shadows } from '../../src/theme/colors';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email'),
@@ -45,7 +46,9 @@ export default function LoginScreen() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
   const [showPassword, setShowPassword] = useState(false);
+  const [isGuestLoading, setIsGuestLoading] = useState(false);
   const login = useAuthStore((state) => state.login);
+  const loginAsGuest = useAuthStore((state) => state.loginAsGuest);
   const isLoading = useAuthStore((state) => state.isLoading);
   const error = useAuthStore((state) => state.error);
   const clearError = useAuthStore((state) => state.clearError);
@@ -81,29 +84,51 @@ export default function LoginScreen() {
 
   const onSubmit = async (data: LoginFormData) => {
     try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      try { await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
       await login(data);
       router.replace('/(tabs)');
     } catch (err) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      try { await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
+      // Error is displayed from store
     }
   };
 
   const handleForgotPassword = () => {
-    Alert.alert(
-      'Reset Password',
-      'Enter your email address and we\'ll send you a link to reset your password.',
-      [{ text: 'OK' }]
-    );
+    const message = 'Password reset functionality coming soon. For now, please contact support@brainxp.app';
+    if (Platform.OS === 'web') {
+      window.alert(message);
+    } else {
+      Alert.alert('Reset Password', message, [{ text: 'OK' }]);
+    }
   };
 
   const handleSocialLogin = (provider: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert(
-      'Coming Soon',
-      `${provider} login will be available in a future update.`,
-      [{ text: 'OK' }]
-    );
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+    const message = `${provider} login will be available in a future update.`;
+    if (Platform.OS === 'web') {
+      window.alert(message);
+    } else {
+      Alert.alert('Coming Soon', message, [{ text: 'OK' }]);
+    }
+  };
+
+  const handleGuestLogin = async () => {
+    try {
+      setIsGuestLoading(true);
+      try { await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
+      await loginAsGuest();
+      router.replace('/(tabs)');
+    } catch (err) {
+      try { await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
+      // Show error for web
+      if (Platform.OS === 'web') {
+        window.alert('Failed to continue as guest. Please try again.');
+      } else {
+        Alert.alert('Error', 'Failed to continue as guest. Please try again.');
+      }
+    } finally {
+      setIsGuestLoading(false);
+    }
   };
 
   return (
@@ -263,6 +288,38 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </Animated.View>
 
+          {/* Guest mode */}
+          <Animated.View
+            entering={FadeInDown.delay(900).duration(600)}
+            style={styles.guestSection}
+          >
+            <TouchableOpacity
+              style={[
+                styles.guestButton,
+                { backgroundColor: isDark ? theme.surface : colors.gray[100] },
+              ]}
+              onPress={handleGuestLogin}
+              disabled={isGuestLoading || isLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Continue as guest"
+              accessibilityHint="Start using the app without creating an account"
+            >
+              {isGuestLoading ? (
+                <ActivityIndicator size="small" color={theme.text.secondary} />
+              ) : (
+                <>
+                  <Ionicons name="person-outline" size={20} color={theme.text.secondary} />
+                  <Text style={[styles.guestButtonText, { color: theme.text.secondary }]}>
+                    Continue as Guest
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <Text style={[styles.guestNote, { color: theme.text.tertiary }]}>
+              Your data stays on this device. Create an account anytime to sync.
+            </Text>
+          </Animated.View>
+
           {/* Register link */}
           <Animated.View
             entering={FadeInUp.delay(1000).duration(600)}
@@ -387,7 +444,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 24,
     gap: 12,
-    marginBottom: 32,
+    marginBottom: 24,
   },
   socialButton: {
     flex: 1,
@@ -402,6 +459,32 @@ const styles = StyleSheet.create({
   socialButtonText: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  guestSection: {
+    paddingHorizontal: 24,
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  guestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+    gap: 10,
+    minWidth: 200,
+    minHeight: 48,
+  },
+  guestButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  guestNote: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 16,
   },
   footer: {
     flexDirection: 'row',

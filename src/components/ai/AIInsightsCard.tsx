@@ -25,6 +25,7 @@ export interface InsightItem {
   title: string;
   message: string;
   actionLabel?: string;
+  actionType?: string;
   actionData?: Record<string, unknown>;
 }
 
@@ -262,3 +263,4 @@ const styles = StyleSheet.create({
 });
 
 export default AIInsightsCard;
+

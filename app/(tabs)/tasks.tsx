@@ -12,12 +12,14 @@ import { useRouter } from 'expo-router';
 import { useTaskStore } from '../../src/stores/taskStore';
 import { useProgressStore } from '../../src/stores/progressStore';
 import { TaskList } from '../../src/components/tasks/TaskList';
-import { DailyListCard } from '../../src/components/notes/DailyListCard';
-import { Task, TaskStatus } from '../../src/types/task';
+import { TaskKanban } from '../../src/components/tasks/TaskKanban';
+import { TaskCalendar } from '../../src/components/tasks/TaskCalendar';
+import { Task } from '../../src/types/task';
 import { colors } from '../../src/theme/colors';
 import { useTheme } from '../../src/theme';
 
 type FilterTab = 'all' | 'today' | 'inbox' | 'upcoming' | 'overdue';
+type ViewMode = 'list' | 'kanban' | 'calendar';
 
 const FILTER_TABS: { key: FilterTab; label: string; emoji: string }[] = [
   { key: 'all', label: 'All', emoji: '📋' },
@@ -30,6 +32,7 @@ const FILTER_TABS: { key: FilterTab; label: string; emoji: string }[] = [
 export default function TasksScreen() {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<FilterTab>('today');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [quickText, setQuickText] = useState('');
   const [quickAddLoading, setQuickAddLoading] = useState(false);
   const [activeSmartSlug, setActiveSmartSlug] = useState<string | null>(null);
@@ -192,7 +195,7 @@ export default function TasksScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Smart list summary */}
+      {/* Filter chips row */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -210,7 +213,7 @@ export default function TasksScreen() {
               styles.smartChip,
               activeFilter === chip.key && { backgroundColor: `${chip.color}20`, borderColor: chip.color },
             ]}
-            onPress={() => setActiveFilter(chip.key)}
+            onPress={() => { setActiveFilter(chip.key); setActiveSmartSlug(null); }}
           >
             <Text style={[styles.smartChipLabel, { color: activeFilter === chip.key ? chip.color : theme.text.secondary }]}>
               {chip.label}
@@ -222,121 +225,76 @@ export default function TasksScreen() {
         ))}
       </ScrollView>
 
-      {/* Widget-style summary */}
-      {widgetSummary && (
-        <View style={[styles.widgetCard, { backgroundColor: theme.background.card, borderColor: theme.border }]}>
-          <View style={styles.widgetRow}>
-            <View style={styles.widgetStat}>
-              <Text style={[styles.widgetLabel, { color: theme.text.secondary }]}>Today</Text>
-              <Text style={[styles.widgetValue, { color: theme.text.primary }]}>{widgetSummary.today.count}</Text>
-            </View>
-            <View style={styles.widgetStat}>
-              <Text style={[styles.widgetLabel, { color: theme.text.secondary }]}>Next 7 days</Text>
-              <Text style={[styles.widgetValue, { color: theme.text.primary }]}>{widgetSummary.next7Days.count}</Text>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Daily list (Twos-style) */}
-      <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
-        <DailyListCard />
-      </View>
-
-      {/* Smart Lists */}
-      {smartLists.length > 0 && (
-        <View style={styles.smartListContainer}>
-          <Text style={[styles.smartListTitle, { color: theme.text.primary }]}>Smart lists</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.smartListScroll}>
-            {smartLists.map((list) => (
-              <TouchableOpacity
-                key={list.id}
-                style={[
-                  styles.smartListChip,
-                  {
-                    borderColor: activeSmartSlug === list.slug ? (list.color || theme.palette.primary[500]) : theme.border,
-                    backgroundColor:
-                      activeSmartSlug === list.slug ? `${(list.color || theme.palette.primary[500])}20` : theme.background.card,
-                  },
-                ]}
-                onPress={() => handleSmartListSelect(list.slug)}
-              >
-                <Text style={[styles.smartListChipText, { color: list.color || theme.text.primary }]}>
-                  {list.icon || '⭐'} {list.name}
-                </Text>
-                {typeof list.taskCount === 'number' && (
-                  <View style={[styles.smartListBadge, { backgroundColor: list.color || theme.palette.primary[500] }]}>
-                    <Text style={styles.smartListBadgeText}>{list.taskCount}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          {activeSmartSlug && smartListLoading && (
-            <Text style={[styles.smartListLoading, { color: theme.text.secondary }]}>Loading list…</Text>
-          )}
-        </View>
-      )}
-
-      {/* Filter Tabs */}
-      <View style={styles.filterContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
-        >
-          {FILTER_TABS.map((tab) => (
+      {/* View Mode Selector - moved up for visibility */}
+      <View style={styles.viewModeContainer}>
+        <View style={styles.viewModeButtons}>
+          {(['list', 'kanban', 'calendar'] as ViewMode[]).map((mode) => (
             <TouchableOpacity
-              key={tab.key}
+              key={mode}
               style={[
-                styles.filterTab,
-                activeFilter === tab.key && styles.filterTabActive,
-                activeFilter === tab.key && { borderColor: theme.palette.primary[400] },
+                styles.viewModeButton,
+                viewMode === mode && styles.viewModeButtonActive,
+                { borderColor: theme.border },
               ]}
-              onPress={() => setActiveFilter(tab.key)}
+              onPress={() => setViewMode(mode)}
             >
-              <Text style={styles.filterEmoji}>{tab.emoji}</Text>
-              <Text
-                style={[
-                  styles.filterLabel,
-                  activeFilter === tab.key && styles.filterLabelActive,
-                  activeFilter === tab.key && { color: theme.palette.primary[600] },
-                ]}
-              >
-                {tab.label}
+              <Text style={[
+                styles.viewModeButtonText,
+                { color: viewMode === mode ? theme.palette.primary[600] : theme.text.secondary },
+              ]}>
+                {mode === 'list' && '📋 List'}
+                {mode === 'kanban' && '📊 Board'}
+                {mode === 'calendar' && '📅 Calendar'}
               </Text>
-              {tab.key === 'inbox' && inboxTasks.length > 0 && (
-                <View style={styles.filterBadge}>
-                  <Text style={styles.filterBadgeText}>{inboxTasks.length}</Text>
-                </View>
-              )}
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </View>
       </View>
 
-      {/* Task List */}
-      <TaskList
-        tasks={filteredTasks}
-        onTaskPress={handleTaskPress}
-        onTaskComplete={handleTaskComplete}
-        onTaskDelete={handleTaskDelete}
-        onRefresh={fetchTasks}
-        isRefreshing={isLoading}
-        emptyMessage={
-          activeFilter === 'inbox'
-            ? 'Inbox is empty'
-            : activeFilter === 'today'
-            ? 'No tasks for today'
-            : 'No tasks yet'
-        }
-        emptyDescription={
-          activeFilter === 'inbox'
-            ? 'Quick capture items will appear here'
-            : 'Tap + to add your first task'
-        }
-        showSections={activeFilter === 'all' || activeFilter === 'today'}
-      />
+      {/* Task View */}
+      {viewMode === 'list' && (
+        <TaskList
+          tasks={filteredTasks}
+          onTaskPress={handleTaskPress}
+          onTaskComplete={handleTaskComplete}
+          onTaskDelete={handleTaskDelete}
+          onRefresh={fetchTasks}
+          isRefreshing={isLoading}
+          emptyMessage={
+            activeFilter === 'inbox'
+              ? 'Inbox is empty'
+              : activeFilter === 'today'
+              ? 'No tasks for today'
+              : 'No tasks yet'
+          }
+          emptyDescription={
+            activeFilter === 'inbox'
+              ? 'Quick capture items will appear here'
+              : 'Tap + to add your first task'
+          }
+          showSections={activeFilter === 'all' || activeFilter === 'today'}
+        />
+      )}
+
+      {viewMode === 'kanban' && (
+        <TaskKanban
+          tasks={filteredTasks}
+          onTaskPress={handleTaskPress}
+          onTaskComplete={handleTaskComplete}
+          onTaskDelete={handleTaskDelete}
+          onTaskSnooze={handleTaskDelete}
+        />
+      )}
+
+      {viewMode === 'calendar' && (
+        <TaskCalendar
+          tasks={filteredTasks}
+          onTaskPress={handleTaskPress}
+          onTaskComplete={handleTaskComplete}
+          onTaskDelete={handleTaskDelete}
+          onTaskSnooze={handleTaskDelete}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -537,5 +495,33 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 11,
     fontWeight: '700',
+  },
+  viewModeContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[200],
+  },
+  viewModeButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  viewModeButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    backgroundColor: colors.gray[50],
+  },
+  viewModeButtonActive: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[400],
+  },
+  viewModeButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

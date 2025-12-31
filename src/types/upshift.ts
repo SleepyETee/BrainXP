@@ -75,3 +75,4 @@ export interface UpshiftEnvelope<TPayload> {
   payload: TPayload;
   sentAt: string;
 }
+

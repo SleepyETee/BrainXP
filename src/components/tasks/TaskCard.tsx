@@ -167,6 +167,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           onPress={onPress}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
+          accessible
+          accessibilityRole="button"
+          accessibilityLabel={`Task: ${task.title}`}
+          accessibilityHint="Double tap to view task details"
+          accessibilityState={{ disabled: isCompleting }}
           style={[
             styles.container,
             compact && styles.containerCompact,
@@ -195,6 +200,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               onPress={handleComplete}
               disabled={isCompleting || isDone}
               activeOpacity={0.7}
+              accessible
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: isDone, disabled: isCompleting || isDone }}
+              accessibilityLabel={`${isDone ? 'Unmark' : 'Mark'} ${task.title} as complete`}
+              accessibilityHint={isDone ? 'Double tap to mark as incomplete' : 'Double tap to complete this task'}
+              style={styles.checkboxTouchTarget}
             >
               <Animated.View
                 style={[
@@ -367,6 +378,12 @@ const styles = StyleSheet.create({
   checkboxContainer: {
     position: 'relative',
     marginRight: 12,
+  },
+  checkboxTouchTarget: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   checkboxGlow: {
     position: 'absolute',

@@ -75,3 +75,4 @@ export interface UpshiftGoalPayload {
   updatedAt?: string;
   completedAt?: string;
 }
+

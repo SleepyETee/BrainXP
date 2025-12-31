@@ -8,7 +8,10 @@ import { prisma } from '../lib/prisma.js';
 const router = Router();
 
 const toIso = (value: string | Date) => new Date(value).toISOString();
-const dayFromIso = (value: string) => new Date(value).toISOString().split('T')[0];
+const dayFromIso = (value: string): Date => {
+  const dateStr = new Date(value).toISOString().split('T')[0];
+  return new Date(dateStr + 'T00:00:00.000Z');
+};
 
 const createBlockSchema = z.object({
   body: z.object({

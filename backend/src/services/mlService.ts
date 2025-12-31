@@ -1,5 +1,5 @@
 // filepath: /Users/sleepyet/BrainXP/backend/src/services/mlService.ts
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -701,13 +701,16 @@ export async function recordFeedback(
   feedback?: string,
   actualValues?: Record<string, unknown>
 ): Promise<void> {
+  const existingUsage = await prisma.aIToolUsage.findUnique({ where: { id: toolUsageId } });
+  const existingOutput = existingUsage?.output as Record<string, unknown> | null | undefined;
+  
   await prisma.aIToolUsage.update({
     where: { id: toolUsageId },
     data: {
       wasHelpful,
       feedback,
       output: actualValues 
-        ? { ...(await prisma.aIToolUsage.findUnique({ where: { id: toolUsageId } }))?.output as object, actualValues }
+        ? ({ ...(existingOutput || {}), actualValues } as Prisma.InputJsonValue)
         : undefined,
     },
   });

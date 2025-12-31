@@ -4,6 +4,7 @@ import morgan from 'morgan';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import routes from './routes/index.js';
+import { errorHandler } from './middleware/errorHandler.js';
 
 // Load environment variables
 dotenv.config();
@@ -21,6 +22,9 @@ app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Serve uploaded files
+app.use('/api/uploads', express.static('uploads'));
+
 // API routes
 app.use('/api', routes);
 
@@ -35,18 +39,15 @@ app.get('/', (req, res) => {
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found', path: req.path });
-});
-
-// Error handler
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Error:', err.message);
-  console.error(err.stack);
-  res.status(500).json({ 
-    error: 'Internal server error',
-    message: process.env['NODE_ENV'] === 'development' ? err.message : undefined,
+  res.status(404).json({ 
+    success: false,
+    error: 'Route not found', 
+    details: { path: req.path } 
   });
 });
+
+// Centralized error handler
+app.use(errorHandler);
 
 // Start server
 app.listen(PORT, () => {

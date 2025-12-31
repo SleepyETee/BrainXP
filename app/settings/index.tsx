@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
-  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSettingsStore } from '../../src/stores/settingsStore';
@@ -94,7 +93,7 @@ export default function SettingsScreen() {
   const resetSettings = useSettingsStore((state) => state.resetSettings);
   const setPaletteMode = useSettingsStore((state) => state.setPaletteMode);
   const theme = useTheme();
-  const { user, logout } = useAuthStore();
+  const { user, logout, isGuest } = useAuthStore();
 
   const handleExportData = async () => {
     try {
@@ -137,21 +136,43 @@ export default function SettingsScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: () => {
-            logout();
-            router.replace('/(auth)/login');
+    const message = isGuest
+      ? 'As a guest, all your data is stored locally. Signing out will keep your data on this device. To save your progress permanently, create an account first.'
+      : 'Are you sure you want to sign out?';
+    
+    const buttons = isGuest
+      ? [
+          { text: 'Cancel', style: 'cancel' as const },
+          {
+            text: 'Create Account',
+            onPress: () => router.push('/(auth)/register'),
           },
-        },
-      ]
-    );
+          {
+            text: 'Sign Out Anyway',
+            style: 'destructive' as const,
+            onPress: async () => {
+              await logout();
+              router.replace('/(auth)/login');
+            },
+          },
+        ]
+      : [
+          { text: 'Cancel', style: 'cancel' as const },
+          {
+            text: 'Sign Out',
+            style: 'destructive' as const,
+            onPress: async () => {
+              await logout();
+              router.replace('/(auth)/login');
+            },
+          },
+        ];
+
+    Alert.alert('Sign Out', message, buttons);
+  };
+
+  const handleCreateAccount = () => {
+    router.push('/(auth)/register');
   };
 
   const formatTime = (time: string) => {
@@ -202,21 +223,46 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* Guest Banner */}
+        {isGuest && (
+          <View style={[styles.guestBanner, { backgroundColor: colors.warning[50], borderColor: colors.warning[200] }]}>
+            <View style={styles.guestBannerContent}>
+              <Text style={[styles.guestBannerIcon]}>👋</Text>
+              <View style={styles.guestBannerText}>
+                <Text style={[styles.guestBannerTitle, { color: colors.warning[800] }]}>
+                  You're using Guest Mode
+                </Text>
+                <Text style={[styles.guestBannerSubtitle, { color: colors.warning[700] }]}>
+                  Create an account to sync your data across devices and never lose your progress.
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[styles.guestBannerButton, { backgroundColor: colors.primary[500] }]}
+              onPress={handleCreateAccount}
+            >
+              <Text style={styles.guestBannerButtonText}>Create Free Account</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Account */}
         <Text style={[styles.sectionTitle, { color: theme.text.secondary }]}>Account</Text>
         <View style={[styles.section, { backgroundColor: theme.background.card }]}>
           <SettingRow
             icon="👤"
             title={user?.name || 'Guest User'}
-            subtitle={user?.email || 'Not signed in'}
-            onPress={() => router.push('/settings/profile')}
+            subtitle={isGuest ? 'Guest Mode - Data stored locally' : (user?.email || 'Not signed in')}
+            onPress={() => isGuest ? handleCreateAccount() : router.push('/settings/profile')}
           />
-          <SettingRow
-            icon="🔐"
-            title="Security"
-            subtitle="Password and authentication"
-            onPress={() => router.push('/settings/security')}
-          />
+          {!isGuest && (
+            <SettingRow
+              icon="🔐"
+              title="Security"
+              subtitle="Password and authentication"
+              onPress={() => router.push('/settings/security')}
+            />
+          )}
         </View>
 
         {/* Appearance */}
@@ -602,45 +648,30 @@ export default function SettingsScreen() {
           />
         </View>
 
-        {/* About */}
-        <Text style={[styles.sectionTitle, { color: theme.text.secondary }]}>About</Text>
+        {/* Help & Support */}
+        <Text style={[styles.sectionTitle, { color: theme.text.secondary }]}>Help & Support</Text>
         <View style={[styles.section, { backgroundColor: theme.background.card }]}>
           <SettingRow
-            icon="📖"
-            title="User Guide"
-            subtitle="Learn how to use BrainXP"
-            onPress={() => Linking.openURL('https://brainxp.app/guide')}
-          />
-          <SettingRow
             icon="❓"
-            title="FAQ"
-            subtitle="Frequently asked questions"
-            onPress={() => Linking.openURL('https://brainxp.app/faq')}
+            title="Help & FAQ"
+            subtitle="Common questions answered"
+            onPress={() => router.push('/support/help')}
           />
           <SettingRow
             icon="💬"
             title="Send Feedback"
             subtitle="Help us improve BrainXP"
-            onPress={() => Linking.openURL('mailto:feedback@brainxp.app')}
+            onPress={() => router.push('/support/feedback')}
           />
           <SettingRow
             icon="📜"
             title="Privacy Policy"
-            onPress={() => Linking.openURL('https://brainxp.app/privacy')}
+            onPress={() => router.push('/support/privacy')}
           />
           <SettingRow
             icon="📋"
             title="Terms of Service"
-            onPress={() => Linking.openURL('https://brainxp.app/terms')}
-          />
-          <SettingRow
-            icon="⭐"
-            title="Rate BrainXP"
-            subtitle="Leave us a review"
-            onPress={() => {
-              // Would open app store
-              Alert.alert('Thanks!', 'This would open the app store for rating.');
-            }}
+            onPress={() => router.push('/support/terms')}
           />
         </View>
 
@@ -791,5 +822,44 @@ const styles = StyleSheet.create({
   appTagline: {
     fontSize: 13,
     fontStyle: 'italic',
+  },
+  guestBanner: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+  },
+  guestBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  guestBannerIcon: {
+    fontSize: 28,
+    marginRight: 12,
+  },
+  guestBannerText: {
+    flex: 1,
+  },
+  guestBannerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  guestBannerSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  guestBannerButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  guestBannerButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

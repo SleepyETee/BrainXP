@@ -373,3 +373,4 @@ export const THERAPY_DISCLAIMER = {
   education: "This information is for educational purposes only and does not constitute medical advice.",
   tdcs: "tDCS is a medical/research treatment. Do not attempt DIY tDCS. If you're interested, speak with a clinician or research team."
 } as const;
+

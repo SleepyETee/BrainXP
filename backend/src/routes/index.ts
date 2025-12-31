@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import authRouter from './auth.js';
 import tasksRouter from './tasks.js';
 import habitsRouter from './habits.js';
 import focusRouter from './focus.js';
@@ -50,6 +51,7 @@ router.get('/', (req: Request, res: Response) => {
 });
 
 // Mount route modules
+router.use('/auth', authRouter);
 router.use('/tasks', tasksRouter);
 router.use('/habits', habitsRouter);
 router.use('/focus', focusRouter);

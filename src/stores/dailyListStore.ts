@@ -149,3 +149,4 @@ export const useDailyListStore = create<DailyListState>()(
     }
   )
 );
+

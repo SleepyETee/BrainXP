@@ -48,7 +48,7 @@ export const SpoonEstimator: React.FC<SpoonEstimatorProps> = ({
   const [timeOfDay, setTimeOfDay] = useState<'morning' | 'afternoon' | 'evening' | 'night' | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [estimate, setEstimate] = useState<SpoonEstimate | null>(null);
-  const [mlPrediction, setMlPrediction] = useState<Awaited<ReturnType<typeof useMLStore.getState().predictSpoons>> | null>(null);
+  const [mlPrediction, setMlPrediction] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [feedbackGiven, setFeedbackGiven] = useState(false);
   const [toolUsageId, setToolUsageId] = useState<string | null>(null);
@@ -237,7 +237,7 @@ export const SpoonEstimator: React.FC<SpoonEstimatorProps> = ({
     return (
       <Animated.View entering={FadeInDown.delay(200)} style={styles.adjustmentsCard}>
         <Text style={styles.adjustmentsTitle}>🎯 Personalized Adjustments</Text>
-        {mlPrediction.adjustmentFactors.map((adj, index) => (
+        {mlPrediction.adjustmentFactors.map((adj: { factor: string; adjustment: number; reason: string }, index: number) => (
           <View key={index} style={styles.adjustment}>
             <View style={styles.adjustmentHeader}>
               <Text style={styles.adjustmentFactor}>{adj.factor}</Text>
@@ -1019,3 +1019,4 @@ const styles = StyleSheet.create({
 });
 
 export default SpoonEstimator;
+

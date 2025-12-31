@@ -9,21 +9,29 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { safeGoBack } from '../src/utils/navigation';
 import * as Haptics from 'expo-haptics';
 import { useCaptureStore } from '../src/stores/captureStore';
 import { useTaskStore } from '../src/stores/taskStore';
 import { useProgressStore } from '../src/stores/progressStore';
 import { Button } from '../src/components/ui/Button';
+import { VoiceRecorder } from '../src/components/capture/VoiceRecorder';
 import { colors } from '../src/theme/colors';
+import { uploadVoice, captureVoice } from '../src/services/api/capture';
 
 export default function InboxScreen() {
   const router = useRouter();
   const [input, setInput] = useState('');
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   
   const captureItems = useCaptureStore((state) => state.items);
   const captureText = useCaptureStore((state) => state.captureText);
+  const captureVoiceStore = useCaptureStore((state) => state.captureVoice);
   const processCapture = useCaptureStore((state) => state.processCapture);
   const dismissCapture = useCaptureStore((state) => state.dismissCapture);
   
@@ -56,13 +64,56 @@ export default function InboxScreen() {
     await dismissCapture(itemId);
   };
 
+  const handleVoiceRecordingComplete = async (uri: string, duration: number) => {
+    try {
+      setIsProcessingVoice(true);
+      setShowVoiceRecorder(false);
+      
+      // Upload the voice file
+      const { url: voiceUrl } = await uploadVoice(uri, duration);
+      
+      // Create capture item
+      await captureVoiceStore({
+        voiceUrl,
+        voiceDuration: duration,
+        source: 'app',
+      });
+      
+      await addXP(3, 'inbox_processed', 'Captured a voice note');
+      
+      // Show success feedback
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error('Error processing voice recording:', error);
+      Alert.alert('Error', 'Failed to save voice recording. Please try again.');
+    } finally {
+      setIsProcessingVoice(false);
+    }
+  };
+
+  const handleMicPress = () => {
+    setShowVoiceRecorder(true);
+  };
+
+  const handlePhotoPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert(
+      'Photo Capture',
+      'Take a photo of notes, whiteboards, or documents to capture them as tasks.\n\nThis feature requires the expo-image-picker package. For now, you can type or dictate your notes.',
+      [
+        { text: 'Use Voice Instead', onPress: () => setShowVoiceRecorder(true) },
+        { text: 'OK', style: 'cancel' },
+      ]
+    );
+  };
+
   const pendingItems = captureItems.filter((item) => item.status === 'pending');
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => safeGoBack(router, '/(tabs)')}>
           <Text style={styles.closeButton}>✕</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Quick Capture</Text>
@@ -88,10 +139,20 @@ export default function InboxScreen() {
             />
           </View>
           <View style={styles.inputActions}>
-            <TouchableOpacity style={styles.mediaButton}>
+            <TouchableOpacity
+              style={styles.mediaButton}
+              onPress={handleMicPress}
+              accessibilityLabel="Record voice note"
+              accessibilityRole="button"
+            >
               <Text>🎤</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.mediaButton}>
+            <TouchableOpacity
+              style={styles.mediaButton}
+              onPress={handlePhotoPress}
+              accessibilityLabel="Capture photo"
+              accessibilityRole="button"
+            >
               <Text>📷</Text>
             </TouchableOpacity>
             <Button
@@ -163,6 +224,23 @@ export default function InboxScreen() {
           </View>
         )}
       </KeyboardAvoidingView>
+
+      {/* Voice Recorder Modal */}
+      <Modal
+        visible={showVoiceRecorder}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowVoiceRecorder(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <VoiceRecorder
+              onRecordingComplete={handleVoiceRecordingComplete}
+              onCancel={() => setShowVoiceRecorder(false)}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -314,6 +392,19 @@ const styles = StyleSheet.create({
     color: colors.gray[500],
     textAlign: 'center',
     lineHeight: 22,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    width: '90%',
+    maxWidth: 400,
   },
 });
 

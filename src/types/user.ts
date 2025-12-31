@@ -3,18 +3,21 @@ export type ADHDExperience = 'newly_diagnosed' | 'diagnosed_years' | 'self_ident
 
 export interface User {
   id: string;
-  firebaseUid: string;
+  firebaseUid?: string;
   email: string;
   name: string;
   avatarUrl?: string;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
+
+  // Guest mode
+  isGuest?: boolean;
 
   // Onboarding
   adhdExperience?: ADHDExperience;
-  primaryGoals: string[];
+  primaryGoals?: string[];
   biggestChallenge?: string;
-  onboardingComplete: boolean;
+  onboardingComplete?: boolean;
 
   // Settings
   settings: UserSettings;

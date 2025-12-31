@@ -10,6 +10,9 @@ import {
   CaptureStatus,
 } from '../types/capture';
 import { useAuthStore } from './authStore';
+import { transcribeAudio } from '../services/voiceTranscription';
+import { useTaskStore } from './taskStore';
+import { useHabitStore } from './habitStore';
 
 interface CaptureState {
   items: CaptureItem[];
@@ -81,12 +84,29 @@ export const useCaptureStore = create<CaptureState>()(
             source: input.source || 'app',
           };
 
-          // TODO: Trigger voice transcription
-
+          // Add item immediately so user sees feedback
           set((state) => ({
             items: [item, ...state.items],
             isLoading: false,
           }));
+
+          // Trigger voice transcription in background
+          if (input.voiceUrl && input.voiceDuration) {
+            transcribeAudio(input.voiceUrl, input.voiceDuration)
+              .then((result) => {
+                // Update item with transcription
+                set((state) => ({
+                  items: state.items.map((i) =>
+                    i.id === item.id
+                      ? { ...i, textContent: result.text, transcriptionConfidence: result.confidence }
+                      : i
+                  ),
+                }));
+              })
+              .catch((err) => {
+                console.warn('Voice transcription failed:', err);
+              });
+          }
 
           return item;
         } catch (error) {
@@ -101,13 +121,48 @@ export const useCaptureStore = create<CaptureState>()(
           const item = get().items.find((i) => i.id === input.captureId);
           if (!item) throw new Error('Capture item not found');
 
-          // TODO: Actually create the task/habit/note
+          let createdItemId = '';
+          const content = item.textContent || item.voiceTranscript || '';
+          const title = input.title || content.substring(0, 50) || 'Captured item';
+
+          // Create the appropriate item based on convertToType
+          switch (input.convertToType) {
+            case 'task': {
+              const task = await useTaskStore.getState().createTask({
+                title,
+                description: input.description || content,
+                priority: (input.priority as 'low' | 'medium' | 'high') || 'medium',
+                dueDate: input.dueDate,
+                tags: input.tags,
+              });
+              createdItemId = task.id;
+              break;
+            }
+            case 'habit': {
+              const habit = await useHabitStore.getState().createHabit({
+                name: title,
+                icon: '✨',
+                color: '#6366F1',
+              });
+              createdItemId = habit.id;
+              break;
+            }
+            case 'note':
+            case 'event':
+            default: {
+              // For notes and events, just generate an ID
+              // These would be handled by their respective stores when implemented
+              createdItemId = generateId();
+              break;
+            }
+          }
+
           const processedItem: CaptureItem = {
             ...item,
             status: 'processed',
             processedAt: new Date().toISOString(),
             convertedToType: input.convertToType,
-            convertedToId: generateId(), // Would be the actual created item ID
+            convertedToId: createdItemId,
           };
 
           set((state) => ({
@@ -121,7 +176,7 @@ export const useCaptureStore = create<CaptureState>()(
             capture: processedItem,
             createdItem: {
               type: input.convertToType,
-              id: processedItem.convertedToId!,
+              id: createdItemId,
             },
             xpEarned: 3,
           };

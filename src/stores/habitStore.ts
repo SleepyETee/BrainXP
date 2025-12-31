@@ -13,6 +13,7 @@ import {
 } from '../types/habit';
 import { useAuthStore } from './authStore';
 import { syncHabit, syncHabitLog } from '../services/upshift';
+import * as habitsApi from '../services/api/habits';
 
 interface HabitState {
   habits: Habit[];
@@ -52,8 +53,29 @@ export const useHabitStore = create<HabitState>()(
       fetchHabits: async () => {
         set({ isLoading: true, error: null });
         try {
-          // TODO: Implement actual API call
-          set({ isLoading: false });
+          // Try to fetch from API, fall back to local storage if offline
+          const apiHabits = await habitsApi.getHabits().catch(() => null);
+          
+          if (apiHabits) {
+            // Merge API habits with local habits (prefer API data)
+            const localHabits = get().habits;
+            const mergedHabits = apiHabits.map(apiHabit => {
+              const localHabit = localHabits.find(h => h.id === apiHabit.id);
+              return localHabit ? { ...localHabit, ...apiHabit } : apiHabit;
+            });
+            
+            // Add any local-only habits that aren't on the server
+            const apiHabitIds = new Set(apiHabits.map(h => h.id));
+            const localOnlyHabits = localHabits.filter(h => !apiHabitIds.has(h.id));
+            
+            set({ 
+              habits: [...mergedHabits, ...localOnlyHabits],
+              isLoading: false 
+            });
+          } else {
+            // Offline mode - keep using local data
+            set({ isLoading: false });
+          }
         } catch (error) {
           set({ error: (error as Error).message, isLoading: false });
         }

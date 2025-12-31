@@ -37,7 +37,7 @@ export const TimeEstimator: React.FC<TimeEstimatorProps> = ({
   const [task, setTask] = useState(initialTask);
   const [complexity, setComplexity] = useState<Complexity>(initialComplexity);
   const [result, setResult] = useState<TimeEstimate | null>(null);
-  const [mlPrediction, setMlPrediction] = useState<Awaited<ReturnType<typeof useMLStore.getState().predictTime>> | null>(null);
+  const [mlPrediction, setMlPrediction] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feedbackGiven, setFeedbackGiven] = useState(false);
@@ -212,7 +212,7 @@ export const TimeEstimator: React.FC<TimeEstimatorProps> = ({
     return (
       <Animated.View entering={FadeInDown.delay(200)} style={styles.mlBreakdownCard}>
         <Text style={styles.mlBreakdownTitle}>🎯 Personalized Breakdown</Text>
-        {mlPrediction.personalizedBreakdown.map((phase, index) => (
+        {mlPrediction.personalizedBreakdown.map((phase: { phase: string; minutes: number; basedOn: string }, index: number) => (
           <View key={index} style={styles.mlBreakdownRow}>
             <View style={styles.mlBreakdownInfo}>
               <Text style={styles.mlBreakdownPhase}>{phase.phase}</Text>

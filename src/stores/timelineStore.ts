@@ -55,10 +55,16 @@ export const useTimelineStore = create<TimelineState>()(
         set({ isLoading: true, error: null, selectedDay: day || get().selectedDay });
         try {
           const targetDay = day || get().selectedDay;
-          const blocks = await getTimelineBlocks(targetDay);
-          set({ blocks: sortBlocks(blocks), isLoading: false, selectedDay: targetDay });
-        } catch (error) {
-          set({ error: (error as Error).message, isLoading: false });
+          const blocks = await getTimelineBlocks(targetDay).catch(() => null);
+          if (blocks) {
+            set({ blocks: sortBlocks(blocks), isLoading: false, selectedDay: targetDay });
+          } else {
+            // Offline mode - keep using local data
+            set({ isLoading: false, selectedDay: targetDay });
+          }
+        } catch {
+          // Silently fail - use persisted local data
+          set({ isLoading: false });
         }
       },
 

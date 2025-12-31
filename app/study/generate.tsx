@@ -16,10 +16,15 @@ import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useStudyStore } from '../../src/stores/studyStore';
 import { colors, gradients, shadows } from '../../src/theme/colors';
+import { generateFlashcards } from '../../src/services/api/aiTools';
+import { FlashcardGeneratorOutput, GeneratedFlashcard } from '../../src/types/aiTools';
 
 interface GeneratedCard {
   front: string;
   back: string;
+  hint?: string;
+  explanation?: string;
+  tags?: string[];
 }
 
 export default function AIGenerateScreen() {
@@ -41,36 +46,36 @@ export default function AIGenerateScreen() {
       return;
     }
 
+    if (content.trim().length < 50) {
+      setError('Please enter more content (at least 50 characters) for better flashcards');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
-      // Simulate AI generation (replace with actual API call)
-      await new Promise((resolve) => setTimeout(resolve, 2500));
+      // Call actual API to generate flashcards
+      const result: FlashcardGeneratorOutput = await generateFlashcards({
+        content: content.trim(),
+        cardCount,
+        difficulty: 'medium',
+        includeExplanations: true,
+      });
       
-      // Generate mock cards based on content length
-      const cards: GeneratedCard[] = [];
-      const sentences = content.split(/[.!?]+/).filter((s) => s.trim().length > 10);
-      
-      for (let i = 0; i < Math.min(cardCount, Math.max(sentences.length, 5)); i++) {
-        const sentence = sentences[i % sentences.length]?.trim() || `Key concept ${i + 1}`;
-        cards.push({
-          front: `What is important about: "${sentence.slice(0, 50)}..."?`,
-          back: `This relates to the main concept of ${sentence.slice(0, 100)}...`,
-        });
-      }
-      
-      // Fill remaining cards if needed
-      while (cards.length < cardCount) {
-        cards.push({
-          front: `Additional concept #${cards.length + 1}`,
-          back: `Explanation of concept #${cards.length + 1}`,
-        });
-      }
+      // Convert API response to local GeneratedCard format
+      const cards: GeneratedCard[] = result.flashcards.map((card: GeneratedFlashcard) => ({
+        front: card.front,
+        back: card.back,
+        hint: card.hint,
+        explanation: card.explanation,
+        tags: card.tags,
+      }));
       
       setGeneratedCards(cards);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
+      console.error('Flashcard generation error:', err);
       setError('Failed to generate flashcards. Please try again.');
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {

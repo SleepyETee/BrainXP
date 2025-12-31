@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors } from '../../theme/colors';
+import { safeGoBack } from '../../utils/navigation';
 
 interface HeaderProps {
   title: string;
@@ -30,7 +31,9 @@ export const Header: React.FC<HeaderProps> = ({
           {showBack && (
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.back()}
+              onPress={() => safeGoBack(router, '/(tabs)')}
+              accessibilityLabel="Go back"
+              accessibilityRole="button"
             >
               <Text style={styles.backIcon}>←</Text>
             </TouchableOpacity>

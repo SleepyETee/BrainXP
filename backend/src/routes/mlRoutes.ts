@@ -10,6 +10,7 @@ import {
   generateTaskRecommendations,
   recordFeedback,
   getLearningStats,
+  UserProductivityPattern,
 } from '../services/mlService.js';
 
 const router = Router();
@@ -40,7 +41,7 @@ router.get('/patterns', authMiddleware, async (req: AuthenticatedRequest, res: R
   }
 });
 
-function generatePatternInsights(patterns: Awaited<ReturnType<typeof analyzeUserPatterns>>): string[] {
+function generatePatternInsights(patterns: UserProductivityPattern): string[] {
   const insights: string[] = [];
   
   // Best time insight
@@ -66,7 +67,7 @@ function generatePatternInsights(patterns: Awaited<ReturnType<typeof analyzeUser
   }
   
   // Task size preference
-  const sizeDescriptions = {
+  const sizeDescriptions: Record<'micro' | 'small' | 'medium' | 'large', string> = {
     micro: 'very quick tasks (under 10 min)',
     small: 'short tasks (10-25 min)',
     medium: 'medium tasks (25-60 min)',
@@ -225,7 +226,7 @@ const feedbackSchema = z.object({
     toolUsageId: z.string().uuid(),
     wasHelpful: z.boolean(),
     feedback: z.string().max(500).optional(),
-    actualValues: z.record(z.unknown()).optional(),
+    actualValues: z.record(z.string(), z.unknown()).optional(),
   }),
 });
 

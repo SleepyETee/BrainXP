@@ -1,8 +1,7 @@
-// filepath: /Users/sleepyet/BrainXP/src/stores/mlStore.ts
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api } from '../services/api';
+import { apiClient } from '../services/api';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ML STORE - Machine Learning State Management
@@ -143,7 +142,7 @@ export const useMLStore = create<MLState>()(
 
         set({ isLoadingPatterns: true });
         try {
-          const response = await api.get('/ml/patterns');
+          const response = await apiClient.get('/ml/patterns');
           const fetchedPatterns = response.data.data as UserPatterns;
           
           set({
@@ -153,9 +152,30 @@ export const useMLStore = create<MLState>()(
           });
           
           return fetchedPatterns;
-        } catch (error) {
+        } catch {
+          // Return cached patterns or default patterns when offline
           set({ isLoadingPatterns: false });
-          throw error;
+          return patterns || {
+            bestHours: [
+              { hour: 9, productivity: 0.8 },
+              { hour: 10, productivity: 0.9 },
+              { hour: 14, productivity: 0.7 },
+              { hour: 15, productivity: 0.75 },
+            ],
+            bestDaysOfWeek: [
+              { day: 1, productivity: 0.8 },
+              { day: 2, productivity: 0.85 },
+              { day: 3, productivity: 0.9 },
+              { day: 4, productivity: 0.8 },
+              { day: 5, productivity: 0.7 },
+            ],
+            averageTaskDuration: 25,
+            estimationAccuracy: 0.7,
+            preferredTaskSize: 'small',
+            peakEnergyTime: 'morning',
+            averageSpoonCapacity: 10,
+            insights: ['Your productivity tends to peak in the morning'],
+          };
         }
       },
 
@@ -169,7 +189,7 @@ export const useMLStore = create<MLState>()(
 
         set({ isLoadingStats: true });
         try {
-          const response = await api.get('/ml/stats');
+          const response = await apiClient.get('/ml/stats');
           const stats = response.data.data as LearningStats;
           
           set({
@@ -179,50 +199,74 @@ export const useMLStore = create<MLState>()(
           });
           
           return stats;
-        } catch (error) {
+        } catch {
+          // Return cached stats when offline, or null
           set({ isLoadingStats: false });
-          throw error;
+          return learningStats || null as unknown as LearningStats;
         }
       },
 
-      predictSpoons: async (taskTitle, taskDescription, currentEnergy, timeOfDay) => {
+      predictSpoons: async (taskTitle, _taskDescription, currentEnergy, _timeOfDay) => {
         set({ isLoadingPrediction: true });
         try {
-          const response = await api.post('/ml/predict-spoons', {
+          const response = await apiClient.post('/ml/predict-spoons', {
             taskTitle,
-            taskDescription,
+            taskDescription: _taskDescription,
             currentEnergy,
-            timeOfDay,
+            timeOfDay: _timeOfDay,
           });
           
           set({ isLoadingPrediction: false });
           return response.data.data as SpoonPrediction;
-        } catch (error) {
+        } catch {
+          // Return default prediction when offline
           set({ isLoadingPrediction: false });
-          throw error;
+          const baseSpoons = 3; // Default medium energy spoons
+          return {
+            predictedSpoons: baseSpoons,
+            confidence: 0.5,
+            basedOnSimilarTasks: 0,
+            adjustmentFactors: [],
+            personalizedTips: ['Break the task into smaller steps if it feels overwhelming'],
+            isPersonalized: false,
+            source: 'default_estimate',
+          } as SpoonPrediction;
         }
       },
 
-      predictTime: async (taskTitle, taskDescription, estimatedMinutes) => {
+      predictTime: async (taskTitle, _taskDescription, estimatedMinutes) => {
         set({ isLoadingPrediction: true });
         try {
-          const response = await api.post('/ml/predict-time', {
+          const response = await apiClient.post('/ml/predict-time', {
             taskTitle,
-            taskDescription,
+            taskDescription: _taskDescription,
             estimatedMinutes,
           });
           
           set({ isLoadingPrediction: false });
           return response.data.data as TimePrediction;
-        } catch (error) {
+        } catch {
+          // Return default prediction when offline
           set({ isLoadingPrediction: false });
-          throw error;
+          const predicted = estimatedMinutes || 25;
+          return {
+            predictedMinutes: predicted,
+            confidence: 0.5,
+            lowerBound: Math.round(predicted * 0.8),
+            upperBound: Math.round(predicted * 1.5),
+            userAccuracyFactor: 1,
+            similarTasksAnalyzed: 0,
+            personalizedBreakdown: [],
+            context: ['Based on your estimate'],
+            isPersonalized: false,
+            source: 'default_estimate',
+          } as TimePrediction;
         }
       },
 
       getRecommendations: async (taskTitle, estimatedMinutes, dueDate) => {
         try {
-          const response = await api.post('/ml/recommendations', {
+          const response = await apiClient.post('/ml/recommendations', {
             taskTitle,
             estimatedMinutes,
             dueDate,
@@ -237,7 +281,7 @@ export const useMLStore = create<MLState>()(
 
       getOptimalTime: async (taskTitle, estimatedMinutes, energyRequired) => {
         try {
-          const response = await api.post('/ml/optimal-time', {
+          const response = await apiClient.post('/ml/optimal-time', {
             taskTitle,
             estimatedMinutes,
             energyRequired,
@@ -255,7 +299,7 @@ export const useMLStore = create<MLState>()(
 
       submitFeedback: async (toolUsageId, wasHelpful, feedback, actualValues) => {
         try {
-          await api.post('/ml/feedback', {
+          await apiClient.post('/ml/feedback', {
             toolUsageId,
             wasHelpful,
             feedback,
